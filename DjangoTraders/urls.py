@@ -22,30 +22,15 @@ from django.urls import include, path
 
 from . import views
 
-"""
-Import the views module from the djtraders app so we can reference its
-view functions in our URL patterns.
-"""
-
+# GET / -> views.home (this project's own home.html, the site's entry point)
 home_url = path('', views.home, name='home')
-"""
-GET / -> views.home
 
-This project's own home.html, not an app's -- the entry point to the
-whole site.
-"""
-
+# GET /admin/... -> Django's built-in admin site
 admin_url = path('admin/', admin.site.urls)
-"""
-GET /admin/... -> Django's built-in admin site.
-"""
 
+# Delegate every URL under /djtraders/ to that app's own urls.py, so
+# each app owns its own routes as more get added later.
 djtraders_url = path('djtraders/', include('djtraders.urls'))
-"""
-Delegate every URL under /djtraders/ to the djtraders app's own
-urls.py. This keeps the project-level file short and lets each app own
-its own routes as more apps are added later.
-"""
 
 urlpatterns = [
     home_url,

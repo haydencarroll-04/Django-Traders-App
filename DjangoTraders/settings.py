@@ -42,6 +42,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Ships the intcomma template filter (thousands-separator formatting,
+    # e.g. 1234.5 -> "1,234.50") used for every currency value across
+    # djtraders' templates -- see those templates' own comments for
+    # where it's loaded and applied.
+    'django.contrib.humanize',
 	'djtraders',
 ]
 
@@ -125,6 +130,20 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# region [CONCEPT] STATICFILES_DIRS vs. per-app static/ folders
+# STATICFILES_DIRS lists static folders that live outside any single
+# app -- the same idea as TEMPLATES['DIRS'] above, but for static files
+# instead of templates. Without this, Django's staticfiles app only
+# finds each installed app's own static/ folder (e.g. an app's
+# static/<app_name>/ -- there's no such folder in this project
+# currently, since djtraders/static/djtraders/css/site.css was removed
+# once the app converted to Bootstrap). This entry adds the project-root
+# static/ folder, which is where static/common/DjangoTraders.css and
+# static/common/DjangoTraders.js live -- project-wide assets that
+# aren't tied to any one app, referenced from templates/common/base.html.
+# endregion
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration

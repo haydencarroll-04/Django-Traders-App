@@ -18,9 +18,6 @@ def home(request):
     Links into the djtraders app's own home page. As more apps join
     the project, this page becomes the index that lists all of them.
     """
-    # render(request, template_name) -- see djtraders/views.py's home()
-    # for the full breakdown of these arguments. The one difference
-    # worth noting here: "home.html" (no "djtraders/" prefix) is found
-    # via TEMPLATES['DIRS'] in settings.py, the project-level templates
-    # folder, not via any app's own templates/ folder (APP_DIRS=True).
+    # "home.html" (no "djtraders/" prefix) is found via TEMPLATES['DIRS']
+    # in settings.py, not via an app's own templates/ folder.
     return render(request, "home.html")

@@ -1,64 +1,146 @@
 <!--
     Template for the customer_list view (djtraders/views.py).
 
-    Django finds this file automatically because TEMPLATES has
-    APP_DIRS=True in settings.py: it looks for a "templates" folder
-    inside each installed app. The extra "djtraders" folder here
-    (templates/djtraders/customer_list.html, not just
-    templates/customer_list.html) namespaces the template by app name,
-    so a second app's "customer_list.html" wouldn't collide with this
-    one.
+    Lives at templates/djtraders/customer_list.html (APP_DIRS=True in
+    settings.py), namespaced by the "djtraders" folder so another app's
+    same-named template wouldn't collide with this one. Extends
+    common/base.html for the shared skeleton; only title/content filled
+    in below.
 
-    Because the view built "customers" from raw SQL with no model,
-    each row here is a plain tuple in the order the SQL SELECT listed
-    the columns: (customer_id, company_name, contact_name, city,
-    country). That's why fields below are accessed by position
-    (customer.0, customer.1, ...) instead of by name
-    (customer.company_name). Once models replace this raw SQL next
-    week, this whole template gets rewritten to use named fields.
+    "customers" is a Customer queryset (djtraders/models.py), so fields
+    are accessed by name (customer.company_name). Each row's company
+    name links to customer_detail via customer.customer_id.
+
+  1. Search bar (company name + country) submits GET params back to
+    this same view -- see views.py's customer_list and models.py's
+    Customer.search for the actual filtering. search_company_name/
+    search_country are passed back from the view so a search stays
+    visible in its own results.
+  2. A centered heading shows customers.count -- however many rows
+    currently match, a search included.
+  3. Actions column has a dt-icon eye link to customer_detail, a second
+    way in besides the Company Name link. Table id="customer-table"
+    lets MakeCustomersDataTable (DjangoTraders.js) target it and disable
+    sorting on this column (it holds an icon, not sortable data).
+  4. Country dropdown submits the search on change (onchange="this.form.submit()"),
+    no need to also click Search.
 -->
-<!DOCTYPE html>
-<html lang="en">
+{% extends "common/base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <title>Customers</title>
-</head>
+{% block title %}Django Traders Customers{% endblock %}
 
-<body>
-    {# This same two-link nav line is repeated at the top of every page #}
-    {# (project home, app home, customer list) so there's always a way #}
-    {# back, not just forward links deeper into the site. #}
-    <div>
-        <a href="{% url 'home' %}">DjangoTraders Project Home</a>
-        | <a href="{% url 'djtraders:home' %}">djTraders App Home</a>
+{% block content %}
+    <!-- Search bar -->
+    <div class="navbar dt-navbar dt-navbar-accent border-bottom border-3 shadow rounded-3 my-3 px-4 py-2">
+        <div class="nav">
+            <h4>
+                <i class="fa-solid fa-magnifying-glass dt-icon"></i>
+                Find Customers
+            </h4>
+        </div>
+
+        <div>
+            <form id="customer-search-form" method="get" class="d-flex gap-2">
+                <input type="text"
+                       name="company_name"
+                       class="form-control"
+                       placeholder="Company Name"
+                       value="{{ search_company_name }}">
+                <input type="text"
+                       name="city"
+                       class="form-control"
+                       placeholder="City"
+                       value="{{ search_city }}">
+                <input type="text"
+                       name="contact_name"
+                       class="form-control"
+                       placeholder="Contact Name"
+                       value="{{ search_contact_name }}">
+                <select name="country" class="form-select" onchange="this.form.submit()">
+                    <option value="">Select Country</option>
+                    {% for country in countries %}
+                        <option value="{{ country }}"
+                                {% if country == search_country %}selected{% endif %}>{{ country }}</option>
+                    {% endfor %}
+                </select>
+                
+                <select name="contact_title" class="form-select" onchange="this.form.submit()">
+                    <option value="">Select Contact Title</option>
+                    {% for title in contact_titles %}
+                        <option value="{{ title }}"
+                                {% if title == search_contact_title %}selected{% endif %}>{{ title }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+
+        <div class="d-flex gap-2">
+            {# "form" submits customer-search-form from outside it, so this button can sit with Reset instead of inside the input row. #}
+            <button type="submit"
+                    form="customer-search-form"
+                    class="btn dt-btn-primary-customer w3-hover-shadow">
+                <i class="fa-solid fa-magnifying-glass"></i> Search
+            </button>
+
+            <div class="dt-link-wrap btn dt-btn-secondary-customer w3-hover-shadow">
+                <a href="{% url 'djtraders:customer_list' %}"
+                   class="text-decoration-none">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Reset
+                </a>
+            </div>
+        </div>
     </div>
 
-    <h1>Customers</h1>
+    <!-- Search results table -->
+    <div class="shadow-sm p-4 mb-2">
+        <h4 class="text-center">
+            {{ customers.count }} customer{{ customers.count|pluralize }} found
+        </h4>
 
-    <table border="1" cellpadding="4" cellspacing="0">
-        <thead>
-            <tr>
-                <th>Customer ID</th>
-                <th>Company Name</th>
-                <th>Contact Name</th>
-                <th>City</th>
-                <th>Country</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            {# {% for %} loops over the "customers" list passed in from the view's context. #}
-            {% for customer in customers %}
+        <table id="customer-table"
+               class="table table-striped table-bordered table-hover align-middle">
+            <thead class="table-dark">
                 <tr>
-                    <td>{{ customer.0 }}</td>
-                    <td>{{ customer.1 }}</td>
-                    <td>{{ customer.2 }}</td>
-                    <td>{{ customer.3 }}</td>
-                    <td>{{ customer.4 }}</td>
+                    <th>Company Name</th>
+                    <th>Contact Name</th>
+                    <th>City</th>
+                    <th>Country</th>
+                    <th>Contact Title</th>
+                    <th class="text-center">Actions</th>
                 </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</body>
-</html>
+            </thead>
+
+            <tbody>
+                {# Loops over the "customers" queryset from the view's context. #}
+                {% for customer in customers %}
+                    <tr>
+                        <td><a href="{% url 'djtraders:customer_detail' customer.customer_id %}">{{ customer.company_name }}</a></td>
+                        <td>{{ customer.contact_name }}</td>
+                        <td>{{ customer.city }}</td>
+                        <td>{{ customer.country }}</td>
+                        <td>{{ customer.contact_title }}</td>
+                        <td class="text-center">
+                            <a href="{% url 'djtraders:customer_detail' customer.customer_id %}"
+                               title="View customer">
+                                <i class="fa-solid fa-eye fa-lg" style="color: steelblue;"></i>
+                            </a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        {# MakeCustomersDataTable (static/common/js/DjangoTraders.js) also #}
+        {# disables sorting on the Actions column, since it holds an icon, #}
+        {# not real data. #}
+        $(function() {
+            MakeCustomersDataTable('#customer-table');
+        });
+    </script>
+{% endblock %}

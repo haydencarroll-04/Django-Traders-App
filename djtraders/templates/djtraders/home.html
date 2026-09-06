@@ -1,38 +1,62 @@
 <!--
-    Home page for the djtraders app.
+    Home page for the djtraders app. No data of its own; just links
+    deeper into the app. Extends common/base.html for the shared
+    head/navbars/page skeleton.
 
-    Lives at djtraders/home.html (not just home.html) for the same
-    app-namespacing reason as customer_list.html -- see the comment
-    there. This page has no data of its own; it just links deeper into
-    the app.
+  1. Customers/Products cards use dt-icon (steel) and dt-icon-supplier
+    (sage) respectively, so the color itself signals which section a
+    link leads to. Each card's <a> is bare, wrapped in a dt-link-wrap
+    div per base.html's link-styling convention.
 -->
-<!DOCTYPE html>
-<html lang="en">
+{% extends "common/base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <title>DJ Traders</title>
-</head>
+{% block title %}DJ Traders{% endblock %}
 
-<body>
+{% block content %}
+    <h1>Welcome to DJ Traders</h1>
 
-    {# This same two-link nav line is repeated at the top of every page #}
-    {# (project home, app home, customer list) so there's always a way #}
-    {# back, not just forward links deeper into the site. #}
     <div>
-        <a href="{% url 'home' %}">DjangoTraders Project Home</a>
-        | <a href="{% url 'djtraders:home' %}">djTraders App Home</a>
+        This is the djTraders app, one piece of the larger
+        DjangoTraders project. It's where the trading data itself
+        lives -- starting with the customer and product records
+        below.
     </div>
 
-    <h1>DJ Traders</h1>
+    <div>
+        Use the cards below to browse the current lists of customers
+        and products as the app grows more features over the course of
+        the semester.
+    </div>
 
-    <div>Welcome to the DJ Traders app.</div>
+    {# url looks up a route by name instead of hardcoding the path; the #}
+    {# "djtraders:" prefix is this app's namespace (app_name in urls.py). #}
+    <div class="row m-3 g-3 justify-content-center">
+        <div class="col-md-3">
+            <div class="card h-100 w3-hover-shadow">
+                <div class="dt-link-wrap card-body text-center">
+                    <a href="{% url 'djtraders:customer_list' %}" class="text-decoration-none">
+                        <i class="fa-solid fa-users fa-2x dt-icon mb-2"></i>
+                        <h5 class="card-title">Customers</h5>
+                        <div class="card-text">
+                            Browse the full list of customers on record.
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
 
-    {# The url tag below looks up a route by its name (from #}
-    {# djtraders/urls.py) instead of hardcoding the path string. #}
-    {# Because urls.py sets app_name = "djtraders", the name must be #}
-    {# prefixed with "djtraders:" here -- that's the namespacing the #}
-    {# url tag needs to find "customer_list" specifically in this app. #}
-    <div><a href="{% url 'djtraders:customer_list' %}">View Customers</a></div>
-</body>
-</html>
+        <div class="col-md-3">
+            <div class="card h-100 w3-hover-shadow">
+                <div class="dt-link-wrap card-body text-center">
+                    <a href="{% url 'djtraders:product_list' %}"  class="text-decoration-none">
+                        <i class="fa-solid fa-box-open fa-2x dt-icon-supplier mb-2"></i>
+                        <h5 class="card-title">Products</h5>
+                        <div class="card-text text-muted">
+                            To be added
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends "common/base.html" %}
+{% load humanize %}
+
+{% block title %}{{ product.product_name }}{% endblock %}
+
+{% block content %}
+    <div class="navbar dt-navbar dt-navbar-accent border-bottom border-3 shadow rounded-3 my-3 px-4 py-2">
+        <div class="nav">
+            <h1 class="h4 mb-0">
+                {{ product.product_name }}
+                {% if product.is_discontinued %}
+                    <span class="badge dt-status-inactive">
+                        <i class="fa-solid fa-ban"></i> Discontinued
+                    </span>
+                {% endif %}
+                {% if product.is_out_of_stock %}
+                    <span class="badge dt-status-outofstock">
+                        <i class="fa-solid fa-circle-xmark"></i> Out of Stock
+                    </span>
+                {% elif product.is_low_stock %}
+                    <span class="badge dt-status-lowstock">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Low Stock
+                    </span>
+            {% endif %}
+            </h1>
+        </div>
+
+        <div class="dt-link-wrap btn dt-btn-secondary-supplier w3-hover-shadow">
+            <a href="{% url 'djtraders:product_list' %}">Back to Products</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-header fw-bolder h4"><i class="fa-solid fa-box dt-icon-supplier"></i> Product Info</div>
+                <table class="table mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row">Unit Price</th>
+                            <td>
+                                {% if product.unit_price is not None %}
+                                    ${{ product.unit_price|floatformat:2|intcomma }}
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Units In Stock</th>
+                            <td>{{ product.units_in_stock|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Quantity Per Unit</th>
+                            <td>{{ product.quantity_per_unit|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Category</th>
+                            <td>{{ product.category.category_name|default:"—" }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Discontinued</th>
+                            <td>{{ product.is_discontinued|yesno:"Yes,No" }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-header fw-bolder h4"><i class="fa-solid fa-industry dt-icon-supplier"></i> Supplier</div>
+                {# product.supplier is nullable (SET_NULL) -- guard like order_detail does for order.customer. #}
+                {% if product.supplier %}
+                    <table class="table mb-0">
+                        <tbody>
+                            <tr>
+                                <th scope="row">Company</th>
+                                <td>{{ product.supplier.company_name }}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Contact</th>
+                                <td>
+                                    {{ product.supplier.contact_name|default:"—" }}{% if product.supplier.contact_title %}, {{ product.supplier.contact_title }}{% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Phone</th>
+                                <td>{{ product.supplier.phone|default:"—" }}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Location</th>
+                                <td>
+                                    {{ product.supplier.city|default:"—" }}{% if product.supplier.country %}, {{ product.supplier.country }}{% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="p-3">No supplier on record for this product.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-header fw-bolder h4"><i class="fa-solid fa-chart-line dt-icon-supplier"></i> Revenue</div>
+                {# Units Sold / Total Revenue are Product model properties -- no math here. #}
+                <table class="table mb-0">
+                    <tbody>
+                        <tr>
+                            <th scope="row">Units Sold</th>
+                            <td>{{ product.units_sold }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Total Revenue</th>
+                            <td>${{ product.total_revenue|floatformat:2|intcomma }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <h2 class="h5">Orders</h2>
+
+        <table id="orders-table"
+               class="table table-striped table-bordered table-hover align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Order #</th>
+                    <th>Order Date</th>
+                    <th>Customer</th>
+                    <th>Quantity</th>
+                    <th>Line Total</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% comment %}
+                Loops over order_lines (product.orderdetail_set). Each row shows
+                its .order and .order.customer -- the two-hop traversal.
+                {% endcomment %}
+                {% for line in order_lines %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'djtraders:order_detail' line.order.order_id %}">
+                                {{ line.order.order_id }}
+                            </a>
+                        </td>
+                        <td data-sort="{{ line.order.order_date|date:'Y-m-d' }}">{{ line.order.order_date|default:"—" }}</td>
+                        <td>
+                            {% if line.order.customer %}
+                                <a href="{% url 'djtraders:customer_detail' line.order.customer.customer_id %}">{{ line.order.customer.company_name }}</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>{{ line.quantity }}</td>
+                        <td>${{ line.line_total|floatformat:2|intcomma }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5">This product has not appeared on any orders.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        {# Reuses customer_detail's Orders helper -- sorts by column 1 #}
+        {# (Order Date), descending, so Order Date stays the 2nd column. #}
+        $(function() {
+            MakeOrdersDataTable('#orders-table');
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,141 @@
+<!--
+    Shared base template for the whole project's Bootstrap-styled pages.
+
+    Lives in templates/common/base.html (project-level, registered in
+    settings.py's TEMPLATES DIRS) -- not domain-specific, so it stays the
+    natural extend-from point for anything added later. Every page in the
+    project extends it: customer_list.html/product_list.html and both
+    home.html pages fill in only the title/content blocks; everything
+    else (Bootstrap CDN link, both navbars) is shared.
+
+    NOTE: this comment avoids spelling out template tags literally --
+    Django's engine parses Django template syntax anywhere in the file, comment
+    or not, so typing one out as plain text registers as a real tag and
+    breaks the template.
+
+  1. w3.css, jQuery, and DataTables load alongside Bootstrap. w3.css
+    classes can collide with Bootstrap's, so expect some manual
+    overriding. jQuery loads because DataTables (a jQuery plugin)
+    requires it; both sit at the end of body so the page's HTML already
+    exists in the DOM when they run.
+  2. nav stays a semantic HTML5 landmark for both navbars (screen
+    readers can jump to it) even though Bootstrap's .navbar class would
+    look identical on a div. w3-hover-shadow (w3.css) adds a hover
+    shadow to every button/button-styled link.
+  3. static/common/css/DjangoTraders.css and static/common/js/DjangoTraders.js
+    hold project-wide custom CSS/JS, loaded last so they can override
+    or build on Bootstrap, w3.css, jQuery, and DataTables.
+  4. Font Awesome (CDN) -- any page can use an icon via a class on an
+    <i> tag, no image files needed.
+  5. Top navbar: a house icon (project home) and logo-small.svg (app
+    home) split the project/app home routes between two links; a badge
+    on the right shows the render-time date/time via Django's "now" tag.
+  6. Footer navbar is page info, not navigation: program icon/course
+    label on the left, the current request's path on the right. Both
+    navbars use .dt-navbar (DjangoTraders.css, the project's own color
+    tokens) with a 3px .dt-navbar-accent border line.
+  7. Project convention: link styling lives on a wrapping div (.dt-link-wrap,
+    DjangoTraders.css), not the <a> itself -- it renders the <a> as
+    "display: contents", so the div carries the classes/box and the
+    link stays fully clickable over everything inside it.
+  8. DataTables activation functions (Make*DataTable) live in
+    DjangoTraders.js, since they're project-wide, not specific to one
+    template.
+  9. DataTables 2.3.2 (declarative "layout" config, replacing the old
+    "dom" string -- see DjangoTraders.js).
+  10. A scripts block after DjangoTraders.js lets each child template
+    call whichever DataTables activation function its own table needs
+    (e.g. MakeCustomersDataTable(tableId)), since different tables need
+    different options (like disabling sort on an icon column).
+  11. A favicon link points at the existing logo-mark.svg -- without it,
+    browsers request /favicon.ico automatically and log a 404.
+-->
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+      <head>
+            <meta charset="UTF-8">
+            <meta name="description"
+                  content="{% block description %}DJ Traders - Trade with confidence{% endblock %}">
+            <title>{% block title %}DJ Traders{% endblock %}</title>
+            {# Browser tab icon -- reuses the existing logo mark instead of a #}
+            {# separate favicon.ico file; without this the browser requests #}
+            {# /favicon.ico automatically and logs a 404 on every page. #}
+            <link rel="icon" href="{% static 'common/images/logo-mark.svg' %}" type="image/svg+xml">
+            {# Bootstrap 5.3 via CDN -- every page's base styling. #}
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+                  rel="stylesheet">
+            {# Font Awesome -- icon classes for <i> tags, e.g. fa-solid fa-user. #}
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+                  rel="stylesheet">
+            {# w3.css -- a second CSS framework alongside Bootstrap; see the #}
+            {# module comment above for the class-collision caveat. #}
+            <link href="https://www.w3schools.com/w3css/4/w3.css" rel="stylesheet">
+            {# DataTables' stylesheet -- styles the table markup its plugin #}
+            {# (loaded at the bottom of body) generates. #}
+            <link href="https://cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css"
+                  rel="stylesheet">
+            {# This project's own CSS, loaded last so it can override anything above. #}
+            <link href="{% static 'common/css/DjangoTraders.css' %}" rel="stylesheet">
+      </head>
+
+      <body>
+            {# Top navbar -- shared on every page, so there's always a way back. #}
+            <nav class="navbar dt-navbar dt-navbar-accent border-bottom border-3 shadow rounded-3 mx-4 mb-2 px-4 py-2">
+                  <div class="d-flex align-items-center gap-4">
+                        <div class="dt-link-wrap w3-hover-shadow d-inline-flex rounded-2 dt-nav-icon p-2"
+                             title="Project Home">
+                              <a href="{% url 'home' %}">
+                                    <span>
+                                          <i class="fa-solid fa-house-laptop fa-2x"></i>
+                                    </span>
+                              </a>
+                        </div>
+
+                        <div class="dt-link-wrap w3-hover-shadow d-inline-flex rounded-2"
+                             title="djTraders App Home">
+                              <a href="{% url 'djtraders:home' %}">
+                                    <img src="{% static 'common/images/logo-small.svg' %}"
+                                         alt="djTraders application logo linking to the app home page"
+                                         height="50">
+                              </a>
+                        </div>
+                  </div>
+                  <div class="fw-bold fs-4">DjangoTraders</div>
+                  <div class="badge text-bg-light text-muted p-2 fst-italic">{% now "N j, Y, P" %}</div>
+            </nav>
+
+            <div class="container p-4 dt-content-container">
+                  {# Each child template fills this block with its own #}
+                  {# heading, intro text, and table -- see customer_list.html. #}
+                  {% block content %}
+                  {% endblock %}
+            </div>
+
+            {# Page-info footer navbar (not navigation) -- see module comment above. #}
+            <nav class="navbar container dt-navbar dt-navbar-accent border-top border-3 shadow rounded-3 my-2 px-4 py-2 small">
+                  <div class="d-flex justify-content-between align-items-center w-100">
+                        <div class="d-flex align-items-center gap-2">
+                              <img src="{% static 'common/images/BSBE.jpeg' %}" alt="BSBE" height="28">
+                              <div>ISM 672 Fall 2026</div>
+                        </div>
+                        <div>{{ request.path }}</div>
+                  </div>
+            </nav>
+            <!-- #region [CONCEPT] jQuery + DataTables activation -->
+            {# DataTables is a jQuery plugin, so jQuery must load first. Both #}
+            {# sit at the end of body so the page's tables already exist in #}
+            {# the DOM by the time these run. #}
+            <!-- #endregion -->
+            <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+            <script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
+            {# This project's own JS, loaded last so it can rely on jQuery/DataTables #}
+            {# above -- includes the DataTables activation functions themselves now. #}
+            <script src="{% static 'common/js/DjangoTraders.js' %}"></script>
+            {# A child template calls whichever DataTables activation function its #}
+            {# own table needs here -- after DjangoTraders.js, so that function #}
+            {# already exists, e.g. customer_list.html's MakeCustomersDataTable(). #}
+            {% block scripts %}
+            {% endblock %}
+      </body>
+</html>

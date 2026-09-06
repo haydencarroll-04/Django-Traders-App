@@ -3,26 +3,20 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
-# Virtual environments
+# Virtual environment (machine-specific, not needed to see the code)
 .venv/
-.venv-1/
 venv/
-env/
 
 # Django
 *.log
 db.sqlite3
-db.sqlite3-journal
-/media/
 /staticfiles/
 local_settings.py
 
 # Environment / secrets
 .env
 
-# macOS
+# OS / editor
 .DS_Store
-
-# Editors
-.vscode/
 .idea/
+.vscode/

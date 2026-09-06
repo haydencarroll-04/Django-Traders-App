@@ -1,11 +1,21 @@
-# Django Traders App
+# Django Traders App — Module 1
 
 A Django application for ISM 672 (Application Design and Programming), built
 against the classic Northwind-style "DjangoTraders" PostgreSQL database.
 
-This repository is **Module 0** — the initial project scaffold: models
-reverse-engineered from the existing database, a customer list page, and the
-shared base template.
+This branch is **Module 1**, extending the Module 0 scaffold (`main`):
+
+- **Customer search** — added Contact Name and City (free-text, case-insensitive
+  partial match) and Contact Title (dropdown, exact match); all three also
+  appear as result columns and stay filled in after a search.
+- **Product search** — added a Supplier dropdown (exact match) and a Supplier
+  company-name column in the results.
+- **Product Detail page** — new view, URL, and template: Product Info,
+  Supplier, and Revenue cards plus a full order history (each order links to
+  its Order Detail page). Product names in the list now link here.
+- **UI/UX** — Low Stock / Out of Stock status badges driven by real stock
+  levels, and Font Awesome icons on the detail-page cards, extending the
+  shared `static/common/css/DjangoTraders.css` design system.
 
 ## Running it locally
 

@@ -1,53 +1,66 @@
 """
 URL configuration for the djtraders app.
 
-Each Django *app* (as opposed to the overall *project*) gets its own
-urls.py so that its routes stay self-contained. The project-level
-urls.py (DjangoTraders/urls.py) then "includes" this file under a
-prefix, keeping app routes decoupled from the project's top-level path
-structure.
+Each Django *app* gets its own urls.py so its routes stay self-contained;
+the project-level urls.py (DjangoTraders/urls.py) "includes" this file
+under a prefix.
+
+  1. Added product_list_url
+        Same shape as customer_list_url, routing to views.product_list.
+
+  2. Added customer_detail_url
+        Captures the row's primary key in the URL path (e.g.
+        /djtraders/customers/ALFKI/) and passes it to the matching view.
+
+  3. Added order_detail_url
+        Same shape, routing /djtraders/orders/<order_id>/ to
+        views.order_detail with an <int:...> converter.
+
+  4. Removed product_detail_url
+        product_detail (view, template, and this route) is left as an
+        assignment component -- students build it themselves.
 """
 from django.urls import path
 
 from . import views
 
-app_name = "djtraders"  # <-- NAMESPACE for every route in this file
-"""
-app_name lets templates/reverse() refer to these routes as
-"djtraders:customer_list" instead of a bare "customer_list". This
-avoids name collisions as more apps are added to the project.
-"""
+# NAMESPACE for every route below -- lets templates/reverse() use
+# "djtraders:customer_list" instead of a bare "customer_list", avoiding
+# name collisions as more apps are added.
+app_name = "djtraders"
 
-home_url = path("", views.home, name="home")  # <-- NAME: "home"
-"""
-GET /djtraders/ -> views.home
+# GET /djtraders/ -> views.home. An empty path means "the root of
+# whatever prefix this urls.py was include()'d under" (djtraders/).
+home_url = path("", views.home, name="home")
 
-An empty string here means "the root of whatever prefix this urls.py
-was include()'d under" -- since DjangoTraders/urls.py includes this
-file at "djtraders/", this route ends up being /djtraders/ exactly,
-i.e. the app's home page.
+# GET /djtraders/customers/ -> views.customer_list
+customer_list_url = path("customers/", views.customer_list, name="customer_list")
 
-Referenced in templates as "djtraders:home" -- NAMESPACE (app_name,
-above) + NAME ("home", set right here) joined with a colon.
-"""
+# GET /djtraders/products/ -> views.product_list
+product_list_url = path("products/", views.product_list, name="product_list")
 
-customer_list_url = path(
-    "customers/",
-    views.customer_list,
-    name="customer_list"  # <-- NAME: "customer_list"
-  )
-"""
-GET /djtraders/customers/ -> views.customer_list
+# "<str:customer_id>" is a path converter: matches a non-slash segment
+# and passes it to the view as customer_id (str, matching Customer's
+# CharField primary key -- an int converter would reject "ALFKI").
+customer_detail_url = path(
+    "customers/<str:customer_id>/", views.customer_detail, name="customer_detail"
+)
 
-name="customer_list" is the identifier used with the url tag in
-templates and reverse() in Python, so the URL string itself can change
-later without breaking references to it.
+# <int:order_id> -- Order.order_id is an integer PK.
+order_detail_url = path(
+    "orders/<int:order_id>/", views.order_detail, name="order_detail"
+)
 
-Referenced in templates as "djtraders:customer_list" -- NAMESPACE
-(app_name, above) + NAME ("customer_list", set right here).
-"""
+# GET /djtraders/products/<product_id>/ -> views.product_detail
+product_detail_url = path(
+    "products/<int:product_id>/", views.product_detail, name="product_detail"
+)      
 
 urlpatterns = [
     home_url,
     customer_list_url,
+    product_list_url,
+    customer_detail_url,
+    order_detail_url,
+    product_detail_url,
 ]

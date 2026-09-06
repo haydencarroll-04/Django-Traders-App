@@ -1,37 +1,25 @@
 <!--
-    Project-level home page.
+    Project-level home page. Lives at the top-level templates/ folder
+    since it belongs to the project as a whole, not to djtraders
+    specifically. Extends common/base.html for the shared skeleton;
+    only the title and content blocks are filled in below.
 
-    Lives at the top-level templates/ folder (registered in
-    settings.py's TEMPLATES DIRS), not inside any app's templates/
-    folder, since this page belongs to the project as a whole rather
-    than to djtraders specifically.
+  1. A centered welcome heading plus the project's large SVG logo, both
+    wrapped in one link to djtraders:home -- the navbars already cover
+    navigation, so this page's content only needs one big way in.
 -->
-<!DOCTYPE html>
-<html lang="en">
+{% extends "common/base.html" %}
+{% load static %}
 
-<head>
-    <meta charset="UTF-8">
-    <title>DjangoTraders</title>
-</head>
+{% block title %}DjangoTraders{% endblock %}
 
-<body>
-
-    {# This same two-link nav line is repeated at the top of every page #}
-    {# (project home, app home, customer list) so there's always a way #}
-    {# back, not just forward links deeper into the site. #}
-    <div>
-        <a href="{% url 'home' %}">DjangoTraders Project Home</a>
-        | <a href="{% url 'djtraders:home' %}">djTraders App Home</a>
+{% block content %}
+    <div class="text-center py-5">
+        <h1 class="display-4 mb-4">Welcome to DjangoTraders</h1>
+        <div class="dt-link-wrap d-inline-block w3-hover-shadow">
+            <a href="{% url 'djtraders:home' %}">
+                <img src="{% static 'common/images/logo-large.svg' %}" alt="Go to the djTraders app">
+            </a>
+        </div>
     </div>
-
-    <h1>DjangoTraders</h1>
-
-    <div>Welcome to the DjangoTraders project.</div>
-
-    {# djtraders/urls.py sets app_name = "djtraders", so its "home" #}
-    {# route must be referenced here as "djtraders:home" -- the #}
-    {# namespace prefix is what tells the url tag below which app's #}
-    {# "home" we mean, as opposed to this project's own "home" route. #}
-    <div><a href="{% url 'djtraders:home' %}">DJ Traders App</a></div>
-</body>
-</html>
+{% endblock %}
