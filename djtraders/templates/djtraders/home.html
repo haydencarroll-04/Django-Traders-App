@@ -1,0 +1,38 @@
+<!--
+    Home page for the djtraders app.
+
+    Lives at djtraders/home.html (not just home.html) for the same
+    app-namespacing reason as customer_list.html -- see the comment
+    there. This page has no data of its own; it just links deeper into
+    the app.
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>DJ Traders</title>
+</head>
+
+<body>
+
+    {# This same two-link nav line is repeated at the top of every page #}
+    {# (project home, app home, customer list) so there's always a way #}
+    {# back, not just forward links deeper into the site. #}
+    <div>
+        <a href="{% url 'home' %}">DjangoTraders Project Home</a>
+        | <a href="{% url 'djtraders:home' %}">djTraders App Home</a>
+    </div>
+
+    <h1>DJ Traders</h1>
+
+    <div>Welcome to the DJ Traders app.</div>
+
+    {# The url tag below looks up a route by its name (from #}
+    {# djtraders/urls.py) instead of hardcoding the path string. #}
+    {# Because urls.py sets app_name = "djtraders", the name must be #}
+    {# prefixed with "djtraders:" here -- that's the namespacing the #}
+    {# url tag needs to find "customer_list" specifically in this app. #}
+    <div><a href="{% url 'djtraders:customer_list' %}">View Customers</a></div>
+</body>
+</html>

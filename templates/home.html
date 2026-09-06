@@ -1,0 +1,37 @@
+<!--
+    Project-level home page.
+
+    Lives at the top-level templates/ folder (registered in
+    settings.py's TEMPLATES DIRS), not inside any app's templates/
+    folder, since this page belongs to the project as a whole rather
+    than to djtraders specifically.
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>DjangoTraders</title>
+</head>
+
+<body>
+
+    {# This same two-link nav line is repeated at the top of every page #}
+    {# (project home, app home, customer list) so there's always a way #}
+    {# back, not just forward links deeper into the site. #}
+    <div>
+        <a href="{% url 'home' %}">DjangoTraders Project Home</a>
+        | <a href="{% url 'djtraders:home' %}">djTraders App Home</a>
+    </div>
+
+    <h1>DjangoTraders</h1>
+
+    <div>Welcome to the DjangoTraders project.</div>
+
+    {# djtraders/urls.py sets app_name = "djtraders", so its "home" #}
+    {# route must be referenced here as "djtraders:home" -- the #}
+    {# namespace prefix is what tells the url tag below which app's #}
+    {# "home" we mean, as opposed to this project's own "home" route. #}
+    <div><a href="{% url 'djtraders:home' %}">DJ Traders App</a></div>
+</body>
+</html>

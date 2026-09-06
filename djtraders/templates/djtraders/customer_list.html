@@ -1,0 +1,64 @@
+<!--
+    Template for the customer_list view (djtraders/views.py).
+
+    Django finds this file automatically because TEMPLATES has
+    APP_DIRS=True in settings.py: it looks for a "templates" folder
+    inside each installed app. The extra "djtraders" folder here
+    (templates/djtraders/customer_list.html, not just
+    templates/customer_list.html) namespaces the template by app name,
+    so a second app's "customer_list.html" wouldn't collide with this
+    one.
+
+    Because the view built "customers" from raw SQL with no model,
+    each row here is a plain tuple in the order the SQL SELECT listed
+    the columns: (customer_id, company_name, contact_name, city,
+    country). That's why fields below are accessed by position
+    (customer.0, customer.1, ...) instead of by name
+    (customer.company_name). Once models replace this raw SQL next
+    week, this whole template gets rewritten to use named fields.
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Customers</title>
+</head>
+
+<body>
+    {# This same two-link nav line is repeated at the top of every page #}
+    {# (project home, app home, customer list) so there's always a way #}
+    {# back, not just forward links deeper into the site. #}
+    <div>
+        <a href="{% url 'home' %}">DjangoTraders Project Home</a>
+        | <a href="{% url 'djtraders:home' %}">djTraders App Home</a>
+    </div>
+
+    <h1>Customers</h1>
+
+    <table border="1" cellpadding="4" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Customer ID</th>
+                <th>Company Name</th>
+                <th>Contact Name</th>
+                <th>City</th>
+                <th>Country</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {# {% for %} loops over the "customers" list passed in from the view's context. #}
+            {% for customer in customers %}
+                <tr>
+                    <td>{{ customer.0 }}</td>
+                    <td>{{ customer.1 }}</td>
+                    <td>{{ customer.2 }}</td>
+                    <td>{{ customer.3 }}</td>
+                    <td>{{ customer.4 }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
