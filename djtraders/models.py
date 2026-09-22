@@ -22,6 +22,12 @@ manual fixes at the top of the generated file -- what changed here, and why:
     rather than repeating its formula.
   5. Customer.formatted_address joins address/city/region/postal_code/
     country into one line (blanks skipped), for customer_detail.html.
+    Employee.formatted_address/Order.formatted_ship_address follow the
+    same pattern, for employee_detail.html/order_detail.html.
+  6. Employee.authenticate/Customer.authenticate back this app's two
+    hand-rolled logins (no django.contrib.auth involved), and
+    Customer.generate_customer_id invents a new customer's 5-letter
+    primary key for customer_create (djtraders/views.py).
 """
 
 class Category(models.Model):
@@ -110,6 +116,75 @@ class Customer(models.Model):
             queryset = queryset.filter(contact_title=contact_title)
         return queryset
 
+    @classmethod
+    def authenticate(cls, customer_id, password):
+        """
+        Looks up the customer by the ID entered in the login form and
+        checks their password: a direct string compare against this
+        customer's own password column (the customers table already has
+        real values seeded there -- unlike Employee, which has no
+        password column of its own and uses a derived birth-year stand-in
+        instead). Returns the matching Customer on success, or None if
+        the customer_id doesn't exist or the password doesn't match.
+
+        Same shape as Employee.authenticate (djtraders/models.py) -- a
+        direct comparison, no Django auth system (django.contrib.auth)
+        involved on either side of this app's two logins.
+        """
+        customer = cls.objects.filter(pk=customer_id).first()
+        if customer is None:
+            return None
+        if customer.password != password:
+            return None
+        return customer
+
+    @classmethod
+    def generate_customer_id(cls, company_name):
+        """
+        Builds a new, unique 5-letter customer_id from a company name,
+        the same style Northwind's own existing rows already use (e.g.
+        "Alfreds Futterkiste" -> ALFKI) -- called only from customer_
+        create's POST handler (djtraders/views.py), and only after the
+        rest of the new customer's fields have already passed
+        CustomerEditForm's own validation. A customer never types or
+        picks this value themselves; it's derived from data they've
+        already entered, the same way Order.order_id (djtraders/
+        models.py) comes from the database's own auto-increment rather
+        than from whoever is placing the order.
+
+        Starts from the company name's own letters (spaces, punctuation,
+        and digits stripped, then uppercased) and takes the first five,
+        padding a short name with "X" if it doesn't have five letters to
+        give. customer_id is this model's own primary key (above), so
+        that column's own uniqueness constraint is the real, final
+        guarantee against a collision -- same principle as Order's
+        auto-increment column, just enforced on a value this code
+        proposes instead of one the database assigns outright. The loop
+        below only exists so a plausible, already-available ID reaches
+        the database on the first try, rather than a user ever seeing
+        that constraint reject one.
+        """
+        letters = "".join(char for char in company_name.upper() if char.isalpha())
+        base = (letters + "XXXXX")[:5]
+
+        if not cls.objects.filter(pk=base).exists():
+            return base
+
+        # base alone is taken -- replace its trailing digits with a
+        # counter (e.g. ALFK1, ALFK2, ... ALFK9, ALF10, ALF11, ...) until
+        # an unused 5-character value turns up.
+        suffix = 1
+        while suffix < 100_000:
+            digits = str(suffix)
+            candidate = base[: 5 - len(digits)] + digits
+            if not cls.objects.filter(pk=candidate).exists():
+                return candidate
+            suffix += 1
+
+        # Practically unreachable for a class-sized dataset -- every
+        # 5-character value derived from this base is already taken.
+        raise ValueError(f"Could not generate a unique customer_id from {company_name!r}")
+
     class Meta:
         managed = False
         db_table = 'customers'
@@ -141,6 +216,32 @@ class Employee(models.Model):
     # SET_NULL so deleting a manager just clears the link, not their reports.
     # endregion
     reports_to = models.ForeignKey('self', models.SET_NULL, db_column='reports_to', blank=True, null=True)
+
+    @property
+    def formatted_address(self):
+        """
+        This employee's address, city, region, postal_code, and country
+        joined into one line (blanks skipped), same pattern as
+        Customer.formatted_address -- used by employee_detail.html.
+        """
+        parts = [self.address, self.city, self.region, self.postal_code, self.country]
+        return ", ".join(part for part in parts if part)
+
+    @classmethod
+    def authenticate(cls, employee_id, password):
+        """
+        Looks up the employee picked in the login form and checks their
+        password: the 4-digit year of their own birth_date, as a string
+        (e.g. birth_date of 1985-03-12 -> password "1985"). Returns the
+        matching Employee on success, or None if the employee_id doesn't
+        exist, has no birth_date on record, or the password is wrong.
+        """
+        employee = cls.objects.filter(pk=employee_id).first()
+        if employee is None or employee.birth_date is None:
+            return None
+        if str(employee.birth_date.year) != password:
+            return None
+        return employee
 
     class Meta:
         managed = False
@@ -228,6 +329,17 @@ class Order(models.Model):
         property -- it needs no extra code to access.
         """
         return sum(line.line_total for line in self.orderdetail_set.all())
+
+    @property
+    def formatted_ship_address(self):
+        """
+        This order's ship_address, ship_city, ship_region,
+        ship_postal_code, and ship_country joined into one line (blanks
+        skipped), instead of four separate fields -- used by
+        order_detail.html, same pattern as Customer.formatted_address.
+        """
+        parts = [self.ship_address, self.ship_city, self.ship_region, self.ship_postal_code, self.ship_country]
+        return ", ".join(part for part in parts if part)
 
     class Meta:
         managed = False

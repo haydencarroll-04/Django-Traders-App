@@ -1,43 +1,23 @@
 <!--
-    Template for the customer_detail view (djtraders/views.py). See
-    customer_list.html for the app-namespacing/base.html explanation.
-    "customer" is a single Customer instance, not a queryset.
-    customer.password is left off the page on purpose.
+    Detail page for a single customer (djtraders/views.py's customer_detail).
+    Shows contact/address info, an order summary (total_quantity/total_revenue,
+    aggregated in the view from this customer's OrderDetail rows), and a list
+    of their orders. customer.password is left off the page.
 
-    total_quantity/total_revenue are computed in the view (aggregated
-    across this customer's OrderDetail rows), not Customer fields.
+    Customer Info and Order Summary are plain <table>s -- DataTables only
+    turns a table into a sortable/searchable one when a template explicitly
+    calls a Make*DataTable() function on its id (see base.html), and only
+    the Orders table below does that, via MakeOrdersDataTable. Each date
+    cell carries a data-sort attribute (an ISO-formatted value) so it sorts
+    by the real date instead of the displayed text.
 
-    Customer Info/Order Summary are plain <table>s -- DataTables only
-    turns a table into a sortable/searchable one when a template
-    explicitly calls a Make*DataTable() function on its id (see
-    base.html), and only the Orders table below does that. Its Order
-    Total column is order.order_total (each order's lines summed, a
-    model property), not order.freight (shipping cost only).
+    Edit buttons and the "Start New Order" button are only shown to an
+    employee or to the customer viewing their own page (self-service access
+    rule, views.py). "Back to Customers" is hidden for a logged-in customer,
+    since customer_list already redirects them straight back to this page.
 
-  1. "Back to Customers" button uses dt-btn-secondary-customer
-    (DjangoTraders.css) for its color, wrapped in dt-link-wrap
-    (base.html) per the project's link-styling convention.
-  2. Orders activated via MakeOrdersDataTable (DjangoTraders.js).
-  3. Customer Info (col-md-8) and Order Summary (col-md-4) share one
-    Bootstrap row instead of stacking as two full-width sections.
-  4. Address/City/Region/Postal Code/Country collapsed into one row via
-    customer.formatted_address (djtraders/models.py).
-  5. Contact Name/Contact Title combined into one "Name, Title" row.
-  6. Customer ID and Fax are not shown as rows on this page.
-  7. An inactive customer gets a dt-status-inactive badge next to their
-    name instead of a row showing the raw inactive_date.
-  8. Orders shares the same row/col-12 wrapping as Customer Info/Order
-    Summary, so its heading and table line up with that section.
-  9. Customer Info/Order Summary use Bootstrap's .card + .card-header
-    (title as the card's first child), not w3-card -- DjangoTraders.css
-    restyles Bootstrap's own .card project-wide, not w3-card.
-  10. Customer Info/Order Summary rows are a plain <table> (th/td pairs),
-    simpler markup than a row of label/value divs for the same content.
-  11. Orders table defaults to Order Date, descending -- each date cell
-    carries a data-sort attribute (an ISO-formatted value) so DataTables
-    sorts by the real date, not the displayed text.
-  12. Customer name and "Back to Customers" share one dt-navbar, instead
-    of a bare heading with the button below the Orders table.
+    Customer Info/Order Summary card headers carry Font Awesome icons
+    (dt-icon), matching product_detail.html's cards.
 -->
 {% extends "common/base.html" %}
 {% load humanize %}
@@ -46,7 +26,7 @@
 
 {% block content %}
     <div class="navbar dt-navbar dt-navbar-accent border-bottom border-3 shadow rounded-3 my-3 px-4 py-2">
-        <div class="nav">
+        <div class="d-flex align-items-center">
             <h1 class="h4 mb-0">
                 {{ customer.company_name }}
                 {% if customer.inactive_date %}
@@ -57,8 +37,38 @@
             </h1>
         </div>
 
-        <div class="dt-link-wrap btn dt-btn-secondary-customer w3-hover-shadow">
-            <a href="{% url 'djtraders:customer_list' %}">Back to Customers</a>
+        <div class="d-flex">
+            {# Edit is only shown to an employee, or the customer viewing their own page -- see views.py's customer_edit_form/customer_edit. #}
+            {% if current_employee or current_customer.customer_id == customer.customer_id %}
+                <div class="dt-link-wrap btn dt-btn-primary-customer w3-hover-shadow">
+                    <a href="{% url 'djtraders:customer_edit_form' customer.customer_id %}" title="Edit this customer (plain form)">
+                        <i class="fa-solid fa-pen-to-square me-1"></i>
+                        Edit (plain)
+                    </a>
+                </div>
+                <div class="dt-link-wrap btn dt-btn-primary-customer w3-hover-shadow">
+                    <a href="{% url 'djtraders:customer_edit' customer.customer_id %}" title="Edit this customer (crispy form)">
+                        <i class="fa-solid fa-pen-to-square me-1"></i>
+                        Edit (crispy)
+                    </a>
+                </div>
+            {% endif %}
+            <!-- #region [WHY] hiding Back to Customers for a logged-in customer -->
+            <!--
+                A logged-in customer viewing their own page would just reload this
+                same page, since customer_list redirects them straight back here.
+                Employees and anonymous visitors still see it, since customer_list
+                is a real, different page for them.
+            -->
+            <!-- #endregion -->
+            {% if not current_customer %}
+                <div class="dt-link-wrap btn dt-btn-secondary-customer w3-hover-shadow">
+                    <a href="{% url 'djtraders:customer_list' %}" title="Back to Customers">
+                        <i class="fa-solid fa-arrow-left me-1"></i>
+                        Back to Customers
+                    </a>
+                </div>
+            {% endif %}
         </div>
     </div>
 
@@ -92,14 +102,25 @@
                     <tbody>
                         <tr>
                             <th scope="row">Total Quantity</th>
-                            <td>{{ total_quantity }}</td>
+                            <td class="text-end">{{ total_quantity }}</td>
                         </tr>
                         <tr>
                             <th scope="row">Total Revenue</th>
-                            <td>${{ total_revenue|floatformat:2|intcomma }}</td>
+                            <td class="text-end">${{ total_revenue|floatformat:2|intcomma }}</td>
                         </tr>
                     </tbody>
                 </table>
+                {% if can_start_order %}
+                    <div class="card-footer bg-white border-0 text-end">
+                        <form method="post" action="{% url 'djtraders:order_create' customer.customer_id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn dt-btn-primary-customer w3-hover-shadow" title="Start a new order">
+                                <i class="fa-solid fa-cart-plus me-1"></i>
+                                Start New Order
+                            </button>
+                        </form>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -114,7 +135,7 @@
                     <th>Order #</th>
                     <th>Order Date</th>
                     <th>Shipped Date</th>
-                    <th>Order Total</th>
+                    <th class="text-end">Order Total</th>
                     <th>Ship To</th>
                 </tr>
             </thead>
@@ -130,7 +151,7 @@
                         </td>
                         <td data-sort="{{ order.order_date|date:'Y-m-d' }}">{{ order.order_date|default:"—" }}</td>
                         <td data-sort="{{ order.shipped_date|date:'Y-m-d' }}">{{ order.shipped_date|default:"—" }}</td>
-                        <td>{% if order.order_total is not None %}${{ order.order_total|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
+                        <td class="text-end">{% if order.order_total is not None %}${{ order.order_total|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
                         <td>{{ order.ship_city|default:"—" }}, {{ order.ship_country|default:"—" }}</td>
                     </tr>
                 {% empty %}

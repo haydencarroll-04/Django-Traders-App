@@ -86,6 +86,35 @@
   --dt-sage-tint: beige;            /* a very pale sage, used for backgrounds */
   --dt-sage-tint-border: yellowgreen;
 
+  /* Slate — the Employee side's color (Module 2) */
+  --dt-slate: slategray;
+  --dt-slate-dark: darkslategray;   /* a darker slate, used for text on a pale slate background */
+  --dt-slate-tint: whitesmoke;      /* a very pale slate, used for backgrounds */
+  --dt-slate-tint-border: lightslategray;
+
+  /* Entity aliases (Module 2) — map each side of the app to a color
+     family in one place. The Module 2 rules at the bottom of this file
+     read these instead of --dt-steel/-sage/-slate directly, so changing
+     what --dt-employee points to recolors every employee-side button
+     and icon at once. */
+  --dt-customer: var(--dt-steel);
+  --dt-customer-dark: var(--dt-steel-dark);
+  --dt-customer-tint: var(--dt-steel-tint);
+  --dt-customer-tint-border: var(--dt-steel-tint-border);
+
+  --dt-supplier: var(--dt-sage);
+  --dt-supplier-dark: var(--dt-sage-dark);
+  --dt-supplier-tint: var(--dt-sage-tint);
+  --dt-supplier-tint-border: var(--dt-sage-tint-border);
+
+  --dt-employee: var(--dt-slate);
+  --dt-employee-dark: var(--dt-slate-dark);
+  --dt-employee-tint: var(--dt-slate-tint);
+  --dt-employee-tint-border: var(--dt-slate-tint-border);
+
+  /* Dark green — a Save/success action color (Module 2) */
+  --dt-success: darkgreen;
+
   /* Gold — a shared highlight color, used sparingly on BOTH sides */
   --dt-gold: goldenrod;
   --dt-gold-tint: palegoldenrod;
@@ -517,4 +546,86 @@
   border-radius: var(--dt-radius-sm);
   padding: 4px 8px;
   margin-right: 6px;
+}
+
+/* ==========================================================================
+   Module 2 additions
+   Employee-side palette, action-colored icons, adjacent-button spacing,
+   and the classes the Module 2 pages (logins, employee detail, customer
+   edit/create, shopping cart) rely on. Each rule reads an entity alias
+   (--dt-customer/-supplier/-employee, see :root) rather than a color
+   family directly.
+   ========================================================================== */
+
+/* Employee counterpart to dt-icon/dt-icon-supplier, plus action colors
+   (Edit, Delete/Cancel, Save) that stay the same regardless of which
+   side of the app a page is on. */
+.dt-icon-employee {
+  color: var(--dt-employee);
+}
+.dt-icon-warning {
+  color: var(--dt-gold-text);
+}
+.dt-icon-danger {
+  color: var(--dt-danger);
+}
+.dt-icon-success {
+  color: var(--dt-success);
+}
+
+.dt-btn-primary-employee {
+  background: var(--dt-employee-tint);
+  color: var(--dt-employee-dark);
+}
+.dt-btn-primary-employee:hover { background: var(--dt-employee-tint-border); }
+
+.dt-btn-secondary-employee {
+  background: var(--dt-white);
+  color: var(--dt-employee);
+}
+.dt-btn-secondary-employee:hover { background: var(--dt-employee-tint); }
+
+/* A top-navbar app-home button -- not tied to any one customer/supplier/
+   employee side, so it reuses the customer palette (the same one the
+   navbar's own accent border already uses). */
+.dt-btn-nav {
+  background: var(--dt-white);
+  color: var(--dt-customer);
+}
+.dt-btn-nav:hover { background: var(--dt-customer-tint); }
+
+/* Adjacent buttons (.btn itself, a .dt-link-wrap standing in for a link
+   styled as one, or a <form> whose only job is to hold one submit
+   button, e.g. a Yes/Deactivate action) always get a gap between them
+   project-wide, so a confirmation alert's Yes/Cancel or a detail page's
+   Edit/Back buttons don't need their own gap-* utility class on every
+   page. td .btn is excluded on purpose: the list pages' row-action
+   icons are meant to sit packed together in the Actions column. */
+.btn + .btn,
+.btn + .dt-link-wrap,
+.btn + form,
+.dt-link-wrap + .btn,
+.dt-link-wrap + .dt-link-wrap,
+.dt-link-wrap + form,
+form + .btn,
+form + .dt-link-wrap,
+form + form {
+  margin-left: 0.5rem;
+}
+td .btn + .btn,
+td .btn + .dt-link-wrap,
+td .btn + form,
+td .dt-link-wrap + .btn,
+td .dt-link-wrap + .dt-link-wrap,
+td .dt-link-wrap + form,
+td form + .btn,
+td form + .dt-link-wrap,
+td form + form {
+  margin-left: 0;
+}
+
+/* A width cap for a centered block of body text (e.g. the djtraders
+   home.html intro paragraph). */
+.dt-lead-narrow {
+  max-width: 640px;
 }

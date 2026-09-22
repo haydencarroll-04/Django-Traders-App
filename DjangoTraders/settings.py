@@ -8,6 +8,15 @@ https://docs.djangoproject.com/en/6.1/topics/settings/
 
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
+
+TEMPLATES' context_processors (below) include
+djtraders.session_context.current_employee/current_customer, so
+base.html's navbar can show the logged-in employee/customer on every
+page (see each function's own docstring in djtraders/session_context.py).
+INSTALLED_APPS includes crispy_forms/crispy_bootstrap5, which render a
+Django Form as Bootstrap 5 markup via {% crispy %} (see
+CRISPY_ALLOWED_TEMPLATE_PACKS/CRISPY_TEMPLATE_PACK below and
+djtraders/forms.py).
 """
 
 import os
@@ -36,6 +45,12 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    # admin (below) is the only one of these four core apps this project
+    # uses directly (DjangoTraders/urls.py wires up /admin/) -- auth,
+    # contenttypes, and messages aren't otherwise touched by djtraders'
+    # own hand-rolled sessions/logins, but the admin site itself depends
+    # on all three (user/permission management, content-type lookups,
+    # and its own flash-message banners), so they stay installed.
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -47,8 +62,27 @@ INSTALLED_APPS = [
     # djtraders' templates -- see those templates' own comments for
     # where it's loaded and applied.
     'django.contrib.humanize',
+    # region [CONCEPT] crispy_forms/crispy_bootstrap5
+    # django-crispy-forms renders a Django Form/ModelForm as styled HTML
+    # via {% load crispy_forms_tags %}/{% crispy form %} in a template,
+    # instead of hand-writing every <input>/<label> yourself.
+    # crispy_bootstrap5 is the "template pack" that tells it to render
+    # using Bootstrap 5's markup/classes (matching this project's own
+    # Bootstrap version) -- selected below via CRISPY_TEMPLATE_PACK.
+    # endregion
+    'crispy_forms',
+    'crispy_bootstrap5',
 	'djtraders',
 ]
+
+# region [CONCEPT] crispy-forms template pack selection
+# CRISPY_ALLOWED_TEMPLATE_PACKS lists which packs are installed;
+# CRISPY_TEMPLATE_PACK picks the one {% crispy %} actually renders with.
+# "bootstrap5" matches the Bootstrap 5.3 this project already loads in
+# templates/common/base.html.
+# endregion
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -78,6 +112,13 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Adds current_employee (djtraders/session_context.py) to
+                # every template's context, for base.html's login/logout navbar.
+                'djtraders.session_context.current_employee',
+                # Same idea for the customer-facing login -- adds
+                # current_customer (djtraders/session_context.py) to every
+                # template's context.
+                'djtraders.session_context.current_customer',
             ],
         },
     },

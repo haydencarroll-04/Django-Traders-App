@@ -24,6 +24,11 @@
     sorting on this column (it holds an icon, not sortable data).
   4. Country dropdown submits the search on change (onchange="this.form.submit()"),
     no need to also click Search.
+  5. Edit/Delete icons in the Actions column, and the New Customer
+    button in the search bar, only show when current_employee is set
+    (djtraders/session_context.py). Delete links to customer_edit with
+    a ?confirm_delete=1 flag, which that page reads to show its own
+    in-page confirmation instead of a browser confirm() dialog.
 -->
 {% extends "common/base.html" %}
 
@@ -74,7 +79,7 @@
             </form>
         </div>
 
-        <div class="d-flex gap-2">
+        <div class="d-flex">
             {# "form" submits customer-search-form from outside it, so this button can sit with Reset instead of inside the input row. #}
             <button type="submit"
                     form="customer-search-form"
@@ -89,6 +94,15 @@
                     Reset
                 </a>
             </div>
+
+            {% if current_employee %}
+                <div class="dt-link-wrap btn dt-btn-primary-customer w3-hover-shadow">
+                    <a href="{% url 'djtraders:customer_create' %}" title="New customer">
+                        <i class="fa-solid fa-user-plus"></i>
+                        New
+                    </a>
+                </div>
+            {% endif %}
         </div>
     </div>
 
@@ -122,9 +136,22 @@
                         <td>{{ customer.contact_title }}</td>
                         <td class="text-center">
                             <a href="{% url 'djtraders:customer_detail' customer.customer_id %}"
-                               title="View customer">
-                                <i class="fa-solid fa-eye fa-lg" style="color: steelblue;"></i>
+                               title="View customer"
+                               class="text-decoration-none px-2">
+                                <i class="fa-solid fa-eye fa-lg dt-icon"></i>
                             </a>
+                            {% if current_employee %}
+                                <a href="{% url 'djtraders:customer_edit' customer.customer_id %}"
+                                   title="Edit customer"
+                                   class="text-decoration-none px-2">
+                                    <i class="fa-solid fa-pen fa-lg dt-icon-warning"></i>
+                                </a>
+                                <a href="{% url 'djtraders:customer_edit' customer.customer_id %}?confirm_delete=1"
+                                   title="Delete customer"
+                                   class="text-decoration-none px-2">
+                                    <i class="fa-solid fa-trash fa-lg dt-icon-danger"></i>
+                                </a>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}

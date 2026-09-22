@@ -28,10 +28,15 @@
   4. Font Awesome (CDN) -- any page can use an icon via a class on an
     <i> tag, no image files needed.
   5. Top navbar: a house icon (project home) and logo-small.svg (app
-    home) split the project/app home routes between two links; a badge
-    on the right shows the render-time date/time via Django's "now" tag.
+    home) split the project/app home routes between two links. The
+    right side shows current_employee/current_customer (djtraders/
+    session_context.py) with a Log Out link when either is logged in,
+    or Customer/Employee Login links and a "Not logged in" label when
+    neither is -- the only login entry point on pages like
+    product_list.html/product_detail.html that need no login.
   6. Footer navbar is page info, not navigation: program icon/course
-    label on the left, the current request's path on the right. Both
+    label on the left, the render-time date/time (Django's "now" tag)
+    plus the current request's path on the right. Both
     navbars use .dt-navbar (DjangoTraders.css, the project's own color
     tokens) with a 3px .dt-navbar-accent border line.
   7. Project convention: link styling lives on a wrapping div (.dt-link-wrap,
@@ -102,7 +107,51 @@
                         </div>
                   </div>
                   <div class="fw-bold fs-4">DjangoTraders</div>
-                  <div class="badge text-bg-light text-muted p-2 fst-italic">{% now "N j, Y, P" %}</div>
+                  <div class="d-flex align-items-center gap-3">
+                        {# current_customer (djtraders/session_context.py) is None when no customer's logged in. #}
+                        {% if current_customer %}
+                              <span class="dt-icon">
+                                    <i class="fa-solid fa-user me-1"></i>
+                                    {{ current_customer.company_name }}
+                              </span>
+                              <div class="dt-link-wrap btn btn-sm dt-btn-secondary-customer w3-hover-shadow">
+                                    <a href="{% url 'djtraders:customer_logout' %}" title="Log out">
+                                          <i class="fa-solid fa-right-from-bracket me-1"></i>
+                                          Log Out
+                                    </a>
+                              </div>
+                        {% endif %}
+                        {# current_employee (djtraders/session_context.py) is None when nobody's logged in. #}
+                        {% if current_employee %}
+                              <span class="dt-icon-employee">
+                                    <i class="fa-solid fa-user me-1"></i>
+                                    {{ current_employee.first_name }} {{ current_employee.last_name }}
+                              </span>
+                              <div class="dt-link-wrap btn btn-sm dt-btn-secondary-employee w3-hover-shadow">
+                                    <a href="{% url 'djtraders:logout' %}" title="Log out">
+                                          <i class="fa-solid fa-right-from-bracket me-1"></i>
+                                          Log Out
+                                    </a>
+                              </div>
+                        {% endif %}
+                        {# Shown only when nobody's logged in at all -- product_list.html/product_detail.html are reachable without a login, so this is the only login entry point on those pages. #}
+                        {% if not current_customer and not current_employee %}
+                              <span class="text-muted small fst-italic">Not logged in</span>
+                              <div class="dt-link-wrap btn btn-sm dt-btn-primary-customer w3-hover-shadow">
+                                    <a href="{% url 'djtraders:customer_login' %}"
+                                       title="Log in as a customer">
+                                          <i class="fa-solid fa-user-lock me-1"></i>
+                                          Customer Login
+                                    </a>
+                              </div>
+                              <div class="dt-link-wrap btn btn-sm dt-btn-primary-employee w3-hover-shadow">
+                                    <a href="{% url 'djtraders:login' %}" title="Log in as an employee">
+                                          <i class="fa-solid fa-user-lock me-1"></i>
+                                          Employee Login
+                                    </a>
+                              </div>
+                        {% endif %}
+                  </div>
             </nav>
 
             <div class="container p-4 dt-content-container">
@@ -119,7 +168,10 @@
                               <img src="{% static 'common/images/BSBE.jpeg' %}" alt="BSBE" height="28">
                               <div>ISM 672 Fall 2026</div>
                         </div>
-                        <div>{{ request.path }}</div>
+                        <div class="d-flex align-items-center gap-3">
+                              <div class="badge text-bg-light text-muted p-2 fst-italic">{% now "N j, Y, P" %}</div>
+                              <div>{{ request.path }}</div>
+                        </div>
                   </div>
             </nav>
             <!-- #region [CONCEPT] jQuery + DataTables activation -->

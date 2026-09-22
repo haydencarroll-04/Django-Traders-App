@@ -1,0 +1,155 @@
+<!--
+    Template for the order_build view (djtraders/views.py) -- the shopping
+    cart page. There is no Order row and no order_id at all until commit --
+    everything here comes from request.session["cart"] (a plain
+    product_id/quantity dict, turned into display-ready lines by
+    _cart_lines, djtraders/views.py) and a fresh Customer/Product lookup,
+    not a database Order. Context here is customer/cart_lines/cart_total.
+
+    Cart Items render in a plain table (_order_line_row.html, one row per
+    line), not a DataTable -- rows are appended/replaced by JS as products
+    are added, which DataTables doesn't handle well once it has already
+    initialized a table's markup. Adding a product to the cart is an
+    AJAX-driven workflow: the Add to Cart form below is intercepted by
+    AddOrderLineItem (DjangoTraders.js), which POSTs to order_add_line and
+    patches the table and running total in place, with no page reload.
+
+    The Place Order card shows the logged-in customer's own current on-file
+    address (customer.formatted_address, djtraders/models.py) read live, so
+    they can confirm where it ships before committing; order_commit copies
+    that same address onto the real Order's ship_* columns at commit time.
+    Commit requires picking an employee (OrderCommitForm's employee field,
+    djtraders/forms.py) as a business rule, not a database one, and is a
+    separate POST (order_commit) that is the only point anything on this
+    page is written to the database.
+-->
+{% extends "common/base.html" %}
+{% load humanize %}
+
+{% block title %}Cart -- {{ customer.company_name }}{% endblock %}
+
+{% block content %}
+    <div class="navbar dt-navbar dt-navbar-accent border-bottom border-3 shadow rounded-3 my-3 px-4 py-2">
+        <div class="d-flex align-items-center">
+            <h1 class="h4 mb-0">Your Cart -- {{ customer.company_name }}</h1>
+        </div>
+        <div class="dt-link-wrap btn dt-btn-secondary-customer w3-hover-shadow">
+            <a href="{% url 'djtraders:customer_detail' customer.customer_id %}" title="Back to Customer">
+                <i class="fa-solid fa-arrow-left me-1"></i>
+                Back to Customer
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-header fw-bolder h4">Cart Items</div>
+                <table id="order-lines-table" class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th class="text-end">Unit Price</th>
+                            <th class="text-end">Quantity</th>
+                            <th class="text-end">Discount</th>
+                            <th class="text-end">Line Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="order-lines-body">
+                        {% for line in cart_lines %}
+                            {% include "djtraders/_order_line_row.html" %}
+                        {% empty %}
+                            <tr id="order-lines-empty-row">
+                                <td colspan="5">Your cart is empty -- add a product below.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="4" class="text-end">Order Total</th>
+                            <th id="order-total" class="text-end">${{ cart_total|floatformat:2|intcomma }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-header fw-bolder h4">Add to Cart</div>
+                <div class="card-body">
+                    <form id="order-detail-form" method="post" action="{% url 'djtraders:order_add_line' customer.customer_id %}">
+                        {% csrf_token %}
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-7">
+                                <label for="id_product" class="form-label">Product</label>
+                                {{ detail_form.product }}
+                            </div>
+                            <div class="col-md-3">
+                                <label for="id_quantity" class="form-label">Quantity</label>
+                                {{ detail_form.quantity }}
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn dt-btn-primary-customer w3-hover-shadow w-100" title="Add to Cart">
+                                    <i class="fa-solid fa-cart-plus me-1"></i>Add to Cart
+                                </button>
+                            </div>
+                        </div>
+                        <div id="order-detail-form-error" class="alert alert-danger mt-3 d-none"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-header fw-bolder h4">Place Order</div>
+                <div class="card-body">
+                    {% if commit_form.non_field_errors %}
+                        <div class="alert alert-danger">{{ commit_form.non_field_errors }}</div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <div class="form-label mb-1">Shipping To</div>
+                        <div class="border rounded p-2 bg-light">
+                            <div class="fw-bold">{{ customer.company_name }}</div>
+                            <div>{{ customer.formatted_address }}</div>
+                        </div>
+                    </div>
+                    <form method="post" action="{% url 'djtraders:order_commit' customer.customer_id %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="{{ commit_form.employee.id_for_label }}" class="form-label">Employee</label>
+                            {{ commit_form.employee }}
+                            {% if commit_form.employee.errors %}
+                                <div class="text-danger small">{{ commit_form.employee.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ commit_form.required_date.id_for_label }}" class="form-label">Required Date</label>
+                            {{ commit_form.required_date }}
+                            {% if commit_form.required_date.errors %}
+                                <div class="text-danger small">{{ commit_form.required_date.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ commit_form.shipped_date.id_for_label }}" class="form-label">Ship-By Date</label>
+                            {{ commit_form.shipped_date }}
+                            {% if commit_form.shipped_date.errors %}
+                                <div class="text-danger small">{{ commit_form.shipped_date.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <button type="submit" class="btn dt-btn-primary-customer w3-hover-shadow w-100" title="Place this order">
+                            <i class="fa-solid fa-check me-1"></i>Commit Order
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        $(function() {
+            AddOrderLineItem('#order-detail-form');
+        });
+    </script>
+{% endblock %}
