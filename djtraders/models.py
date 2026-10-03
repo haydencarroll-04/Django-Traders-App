@@ -397,6 +397,16 @@ class Product(models.Model):
         return self.units_in_stock == 0
 
     @classmethod
+    def generate_product_id(cls):
+        """
+        products.product_id has no auto-increment in the database, so a
+        new product's ID is the current highest ID plus one -- the same
+        "never typed by the user" idea as Customer.generate_customer_id.
+        """
+        highest = cls.objects.order_by("-product_id").first()
+        return (highest.product_id + 1) if highest else 1
+
+    @classmethod
     def search(cls, product_name="", category_id="", supplier_id="", show_all=False):
         """
         Filters products by an optional product name and/or category,

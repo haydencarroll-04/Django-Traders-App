@@ -151,6 +151,18 @@
                                    class="text-decoration-none px-2">
                                     <i class="fa-solid fa-trash fa-lg dt-icon-danger"></i>
                                 </a>
+                            {% if customer.inactive_date %}
+                                <form method="post"
+                                    action="{% url 'djtraders:customer_reactivate' customer.customer_id %}"
+                                    class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            title="Reactivate customer"
+                                            class="btn btn-link p-0 px-2">
+                                        <i class="fa-solid fa-user-check fa-lg dt-icon"></i>
+                                    </button>
+                                </form>
+                            {% endif %}
                             {% endif %}
                         </td>
                     </tr>

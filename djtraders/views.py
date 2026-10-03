@@ -43,7 +43,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .forms import CustomerEditForm, OrderCommitForm, OrderDetailForm, default_required_date, default_shipped_date
+from .forms import CustomerEditForm, OrderCommitForm, OrderDetailForm, ProductEditForm, default_required_date, default_shipped_date
 from .models import Category, Customer, Employee, Order, OrderDetail, Product, Supplier
 
 
@@ -251,6 +251,70 @@ def product_detail(request, product_id):
     }
     return render(request, "djtraders/product_detail.html", context)
 
+def product_create(request):
+    """
+    "Create Empty and Edit", same as customer_create: an unsaved Product()
+    is shown in product_edit.html and only written on a valid Save.
+    Employee-only -- customers shouldn't change the catalog or prices.
+    """
+    if not request.session.get("current_user"):
+        return redirect("djtraders:product_list")
+
+    if request.method == "POST":
+        form = ProductEditForm(request.POST, instance=Product())
+        if form.is_valid():
+            # product_id has no auto-increment and discontinued is NOT NULL
+            # with no default, so both are set here, after validation.
+            form.instance.product_id = Product.generate_product_id()
+            form.instance.discontinued = 0
+            form.save()
+            return redirect("djtraders:product_detail", product_id=form.instance.product_id)
+    else:
+        form = ProductEditForm(instance=Product())
+
+    context = {"product": form.instance, "form": form, "new_product": True}
+    return render(request, "djtraders/product_edit.html", context)
+
+
+def product_edit(request, product_id):
+    """
+    Edits an existing product. Employee-only. ?confirm_delete=1 shows the
+    in-page "are you sure?" prompt instead of the form, same as customer_edit.
+    """
+    product = get_object_or_404(Product, pk=product_id)
+
+    if not request.session.get("current_user"):
+        return redirect("djtraders:product_detail", product_id=product_id)
+
+    if request.method == "POST":
+        form = ProductEditForm(request.POST, instance=product)
+        if form.is_valid():
+            form.save()
+            return redirect("djtraders:product_detail", product_id=product.product_id)
+    else:
+        form = ProductEditForm(instance=product)
+
+    confirm_delete = request.GET.get("confirm_delete") == "1"
+    context = {"product": product, "form": form, "confirm_delete": confirm_delete}
+    return render(request, "djtraders/product_edit.html", context)
+
+
+def product_delete(request, product_id):
+    """
+    Soft delete: sets discontinued=1 and date_discontinued=today instead of
+    removing the row, so order history stays intact. Employee-only and
+    POST-only, mirroring customer_delete.
+    """
+    if not request.session.get("current_user"):
+        return redirect("djtraders:product_list")
+
+    if request.method == "POST":
+        product = get_object_or_404(Product, pk=product_id)
+        product.discontinued = 1
+        product.date_discontinued = timezone.now().date()
+        product.save()
+
+    return redirect("djtraders:product_list")
 
 def customer_detail(request, customer_id):
     """
@@ -459,6 +523,24 @@ def customer_delete(request, customer_id):
         customer.save()
 
     return redirect("djtraders:customer_list")
+
+def customer_reactivate(request, customer_id):
+    """
+    Reverses customer_delete(): clears inactive_date so the customer is
+    active again. Same access rule as Delete (employee-only) and same
+    POST-only convention, since it changes data. Order history is never
+    touched.
+    """
+    if not request.session.get("current_user"):
+        return redirect("djtraders:customer_list")
+
+    if request.method == "POST":
+        customer = get_object_or_404(Customer, pk=customer_id)
+        customer.inactive_date = None
+        customer.save()
+
+    return redirect("djtraders:customer_list")
+
 
 
 def order_detail(request, order_id):

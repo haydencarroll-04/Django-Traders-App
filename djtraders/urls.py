@@ -74,6 +74,22 @@ product_detail_url = path(
     "products/<int:product_id>/", views.product_detail, name="product_detail"
 )
 
+# GET/POST /djtraders/products/create/ -> views.product_create
+# Must come before product_detail_url in urlpatterns, same reason as
+# customer_create_url ("create" would otherwise be tried as a product id --
+# here <int:> wouldn't match it anyway, but keep the habit).
+product_create_url = path("products/create/", views.product_create, name="product_create")
+
+# GET/POST /djtraders/products/<product_id>/edit/ -> views.product_edit
+product_edit_url = path(
+    "products/<int:product_id>/edit/", views.product_edit, name="product_edit"
+)
+
+# POST /djtraders/products/<product_id>/delete/ -> views.product_delete
+product_delete_url = path(
+    "products/<int:product_id>/delete/", views.product_delete, name="product_delete"
+)
+
 # GET/POST /djtraders/customer-login/ -> views.customer_login_view
 customer_login_url = path(
     "customer-login/", views.customer_login_view, name="customer_login"
@@ -99,6 +115,13 @@ customer_edit_url = path(
 # POST /djtraders/customers/<customer_id>/delete/ -> views.customer_delete
 customer_delete_url = path(
     "customers/<str:customer_id>/delete/", views.customer_delete, name="customer_delete"
+)
+
+# POST /djtraders/customers/<customer_id>/reactivate/ -> views.customer_reactivate
+customer_reactivate_url = path(
+    "customers/<str:customer_id>/reactivate/",
+    views.customer_reactivate,
+    name="customer_reactivate",
 )
 
 # <int:employee_id> -- Employee.employee_id is an integer PK.
@@ -160,4 +183,8 @@ urlpatterns = [
     order_add_line_url,
     order_commit_url,
     order_delete_url,
+    customer_reactivate_url,
+    product_create_url,
+    product_edit_url,
+    product_delete_url,
 ]

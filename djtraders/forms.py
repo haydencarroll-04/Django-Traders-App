@@ -46,7 +46,7 @@ from django.core.exceptions import ValidationError
 
 from datetime import date, timedelta
 
-from .models import Customer, Order, OrderDetail
+from .models import Category, Customer, Order, OrderDetail, Product, Supplier
 
 # Digits, spaces, parentheses, and dashes only, 7-20 characters -- loose
 # enough to accept "(206) 555-9857" or "030-0074321", tight enough to
@@ -370,3 +370,142 @@ def default_required_date():
 def default_shipped_date():
     """order_date (today, at commit) + 1 week -- see OrderCommitForm."""
     return date.today() + timedelta(weeks=1)
+class ProductEditForm(forms.ModelForm):
+    """
+    Create/edit form for a Product, built the same way as CustomerEditForm.
+    discontinued/date_discontinued are deliberately NOT fields here --
+    they're set by the view (product_create / product_delete).
+
+    Validation layers for the two business rules below:
+      - Browser: min= / required attributes set in __init__ (courtesy).
+      - Server: clean_unit_price() and clean() (the real check).
+      - Database: none. The products table only enforces NOT NULL, the
+        primary key, and the supplier/category foreign keys, so these
+        rules live only in this form.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Browser layer: price must be at least one cent.
+        self.fields["unit_price"].required = True
+        self.fields["unit_price"].widget.attrs.update({
+            "min": "0.01",
+            "step": "0.01",
+            "title": "Price must be greater than $0.",
+        })
+        for name in ("units_in_stock", "units_on_order", "reorder_level"):
+            self.fields[name].widget.attrs.update({"min": 0})
+        # Models have no __str__, so give the dropdowns readable labels.
+        self.fields["supplier"].required = True
+        self.fields["supplier"].queryset = Supplier.objects.order_by("company_name")
+        self.fields["supplier"].label_from_instance = lambda s: s.company_name
+        self.fields["category"].queryset = Category.objects.order_by("category_name")
+        self.fields["category"].label_from_instance = lambda c: c.category_name
+
+        self.helper = FormHelper()
+        self.helper.form_id = "product-edit-form"
+        self.helper.layout = Layout(
+            Row(
+                Column("product_name", css_class="col-md-8"),
+                Column("unit_price", css_class="col-md-4"),
+            ),
+            Row(
+                Column("supplier", css_class="col-md-6"),
+                Column("category", css_class="col-md-6"),
+            ),
+            Row(
+                Column("quantity_per_unit", css_class="col-md-6"),
+                Column("units_in_stock", css_class="col-md-2"),
+                Column("units_on_order", css_class="col-md-2"),
+                Column("reorder_level", css_class="col-md-2"),
+            ),
+            HTML(
+                """
+                <div class="d-flex gap-2 mt-3 justify-content-end">
+                    <button type="submit" class="btn dt-btn-primary-supplier w3-hover-shadow" title="Save changes">
+                        <i class="fa-solid fa-floppy-disk me-1 dt-icon-success"></i>Save
+                    </button>
+                    <div class="dt-link-wrap btn dt-btn-secondary-supplier w3-hover-shadow">
+                        {% if new_product %}
+                            <a href="{% url 'djtraders:product_list' %}" title="Cancel -- nothing has been saved yet">
+                                <i class="fa-solid fa-xmark me-1 dt-icon-danger"></i>Cancel
+                            </a>
+                        {% else %}
+                            <a href="{% url 'djtraders:product_detail' product.product_id %}" title="Cancel and discard changes">
+                                <i class="fa-solid fa-xmark me-1 dt-icon-danger"></i>Cancel
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                """
+            ),
+        )
+
+    class Meta:
+        model = Product
+        fields = [
+            "product_name",
+            "supplier",
+            "category",
+            "quantity_per_unit",
+            "unit_price",
+            "units_in_stock",
+            "units_on_order",
+            "reorder_level",
+        ]
+
+    def clean_unit_price(self):
+        """
+        Server layer of Rule 1: a price must be greater than zero. The
+        column allows NULL, zero and negatives, so nothing else would
+        stop a $0 or negative product from being saved.
+        """
+        price = self.cleaned_data.get("unit_price")
+        if price is None or price <= 0:
+            raise ValidationError("Unit price must be greater than $0.")
+        return price
+
+    def clean(self):
+        """
+        Server layer of Rule 2: the same supplier can't have two products
+        with the same name. Needs product_name and supplier together, so
+        it's a cross-field clean() rather than a clean_<field>().
+        exclude(pk=...) lets an existing product keep its own name when
+        it's being edited. (A brand-new product has product_id None, so
+        nothing is excluded.)
+        """
+        cleaned_data = super().clean()
+        name = cleaned_data.get("product_name")
+        supplier = cleaned_data.get("supplier")
+        if name and supplier:
+            duplicate = (
+                Product.objects.filter(product_name__iexact=name.strip(), supplier=supplier)
+                .exclude(pk=self.instance.pk)
+                .exists()
+            )
+            if duplicate:
+                self.add_error(
+                    "product_name",
+                    f"{supplier.company_name} already supplies a product with this name.",
+                )
+        return cleaned_data
+
+    def clean_units_in_stock(self):
+        """Server layer for stock: can't be negative (browser min=0 is only a courtesy)."""
+        value = self.cleaned_data.get("units_in_stock")
+        if value is not None and value < 0:
+            raise ValidationError("Units in stock can't be negative.")
+        return value
+
+    def clean_units_on_order(self):
+        """Server layer for units on order: can't be negative (browser min=0 is only a courtesy)."""
+        value = self.cleaned_data.get("units_on_order")
+        if value is not None and value < 0:
+            raise ValidationError("Units on order can't be negative.")
+        return value
+
+    def clean_reorder_level(self):
+        """Server layer for reorder level: can't be negative (browser min=0 is only a courtesy)."""
+        value = self.cleaned_data.get("reorder_level")
+        if value is not None and value < 0:
+            raise ValidationError("Reorder level can't be negative.")
+        return value
