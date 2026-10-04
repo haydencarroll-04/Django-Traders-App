@@ -237,7 +237,7 @@ class CustomerEditForm(forms.ModelForm):
             raise ValidationError("City can't contain numbers.")
         return city
 
-
+MAX_FREE_DISCOUNT_PERCENT = 10
 class OrderDetailForm(forms.ModelForm):
     """
     Adds one line item (product + quantity) to a draft Order.
@@ -246,18 +246,26 @@ class OrderDetailForm(forms.ModelForm):
     and discount (both required, non-null columns on OrderDetail --
     djtraders/models.py) are set by the view from the chosen product's
     own unit_price and a flat 0.0 discount, not asked for here.
-
-    Deliberately does NOT check quantity against the selected product's
-    own units_in_stock -- units_in_stock is just an ordinary column,
-    with nothing in the schema constraining OrderDetail.quantity
-    against it. Adding that check would follow the same pattern as
-    CustomerEditForm's clean_phone()/clean_company_name()/clean_city()
-    above, except as a cross-field clean() rather than a single-field
-    clean_<field>(), since it depends on both product and quantity
-    together.
     """
-    def __init__(self, *args, **kwargs):
+    # Not model fields. OrderDetail.discount is stored as a fraction (0.10 =
+    # 10%), so the user types a percent and the view divides by 100. Blank
+    # means "leave this product's existing discount alone". Both fields are
+    # only shown to employees (order_build.html).
+    discount_percent = forms.FloatField(
+        required=False, min_value=0, max_value=100, label="Discount (%)"
+    )
+    manager_approved = forms.BooleanField(required=False, label="Manager approved")
+
+    def __init__(self, *args, in_cart=None, is_employee=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.is_employee = is_employee
+        self.fields["discount_percent"].widget.attrs.update({
+            "class": "form-control", "step": "0.01", "min": 0, "max": 100, "placeholder": "0",
+        })
+        self.fields["manager_approved"].widget.attrs.update({"class": "form-check-input"})
+        # {str(product_id): quantity} already in the session cart, so the
+        # stock check in clean() counts what's already there.
+        self.in_cart = in_cart or {}
         # Only non-discontinued products are offered -- same reasoning
         # as Product.search's own show_all=False default (models.py).
         self.fields["product"].queryset = self.fields["product"].queryset.filter(
@@ -292,6 +300,56 @@ class OrderDetailForm(forms.ModelForm):
         if quantity is not None and quantity < 1:
             raise ValidationError("Quantity must be at least 1.")
         return quantity
+
+
+    def clean_discount_percent(self):
+        """
+        Server layer, rule 1: only employees can apply a discount at all.
+        The template hides the field from customers, but a POST that adds it
+        by hand lands here and is refused.
+        """
+        percent = self.cleaned_data.get("discount_percent")
+        if percent and not self.is_employee:
+            raise ValidationError("Only an employee can apply a discount.")
+        return percent
+
+    def clean(self):
+        """
+        Server layer of the stock rule (the real check). Needs product and
+        quantity together, so it's a cross-field clean() rather than a
+        clean_<field>() -- the same shape OrderCommitForm.clean() uses.
+        Counts what's already in the cart, since adding the same product
+        again bumps the existing line. units_in_stock can be NULL; that's
+        treated as 0, since stock that isn't recorded can't be sold.
+        There's no database backstop: nothing stops order_details.quantity
+        from exceeding products.units_in_stock.
+        """
+        cleaned_data = super().clean()
+        product = cleaned_data.get("product")
+        quantity = cleaned_data.get("quantity")
+        if product is not None and quantity is not None:
+            available = product.units_in_stock or 0
+            already = self.in_cart.get(str(product.product_id), 0)
+            if already + quantity > available:
+                message = f"Only {available} of {product.product_name} in stock"
+                if already:
+                    message += f" ({already} already in your cart)"
+                self.add_error("quantity", message + ".")
+        # Server layer, rule 2: staff discounts above the free ceiling also
+        # need manager approval. Cross-field (discount + approval together),
+        # so it lives in clean() rather than a clean_<field>().
+        percent = cleaned_data.get("discount_percent")
+        if (
+            percent
+            and percent > MAX_FREE_DISCOUNT_PERCENT
+            and not cleaned_data.get("manager_approved")
+        ):
+            self.add_error(
+                "discount_percent",
+                f"Discounts above {MAX_FREE_DISCOUNT_PERCENT}% need manager approval -- "
+                'tick "Manager approved".',
+            )
+        return cleaned_data
 
 
 class OrderCommitForm(forms.ModelForm):

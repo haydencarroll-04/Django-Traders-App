@@ -14,6 +14,19 @@
     <td>{{ line.product.product_name }}</td>
     <td class="text-end">${{ line.unit_price|floatformat:2 }}</td>
     <td class="text-end">{{ line.quantity }}</td>
-    <td class="text-end">{{ line.discount|floatformat:2 }}</td>
+    <td class="text-end">
+        {{ line.discount_percent|floatformat:"-2" }}%
+        {% if line.is_volume_discount %}<span class="badge text-bg-success ms-1" title="Automatic discount for ordering more than 10 units">Volume</span>{% endif %}
+    </td>
     <td class="text-end">${{ line.line_total|floatformat:2 }}</td>
+    <td class="text-center">
+        <form method="post"
+              action="{% url 'djtraders:order_remove_line' customer_id line.product.product_id %}"
+              class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-link p-0" title="Remove from cart">
+                <i class="fa-solid fa-trash fa-lg dt-icon-danger"></i>
+            </button>
+        </form>
+    </td>
 </tr>

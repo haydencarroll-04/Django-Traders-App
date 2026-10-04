@@ -154,6 +154,19 @@ order_delete_url = path(
     "orders/<int:order_id>/delete/", views.order_delete, name="order_delete"
 )
 
+# POST /djtraders/customers/<customer_id>/orders/remove-line/<product_id>/ -> views.order_remove_line
+order_remove_line_url = path(
+    "customers/<str:customer_id>/orders/remove-line/<int:product_id>/",
+    views.order_remove_line,
+    name="order_remove_line",
+)
+
+# POST /djtraders/customers/<customer_id>/orders/clear/ -> views.order_clear_cart
+order_clear_cart_url = path(
+    "customers/<str:customer_id>/orders/clear/", views.order_clear_cart, name="order_clear_cart"
+)
+
+
 # region [CONCEPT] why this list must be named "urlpatterns"
 # urlpatterns is the one name Django's URL resolver actually looks for in
 # this module -- it must be called exactly that (not e.g. "urls" or
@@ -187,4 +200,6 @@ urlpatterns = [
     product_create_url,
     product_edit_url,
     product_delete_url,
+    order_remove_line_url,
+    order_clear_cart_url,
 ]

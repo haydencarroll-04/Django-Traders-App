@@ -212,6 +212,20 @@ function ValidateCustomerEditForm(formId) {
 function AddOrderLineItem(formId) {
     const $form = $(formId);
     const $errorBox = $form.find("#order-detail-form-error");
+    // Browser layer (courtesy only) of the stock rule. order_add_line's
+    // OrderDetailForm.clean() is the real check; this just stops an
+    // obviously-too-large quantity before a request is sent.
+    const stockElement = document.getElementById("stock-map");
+    const stockMap = stockElement ? JSON.parse(stockElement.textContent) : {};
+
+    $("#id_product").on("change", function () {
+        const stock = stockMap[$(this).val()];
+        if (stock === undefined) {
+            $("#id_quantity").removeAttr("max");
+        } else {
+            $("#id_quantity").attr("max", stock);
+        }
+    });
 
     function showError(message) {
         $errorBox.text(message).removeClass("d-none");
@@ -235,6 +249,11 @@ function AddOrderLineItem(formId) {
         }
         if (!quantity || quantity < 1) {
             showError("Quantity must be at least 1.");
+            return;
+        }
+        const inStock = stockMap[productId];
+        if (inStock !== undefined && quantity > inStock) {
+            showError("Only " + inStock + " in stock.");
             return;
         }
 
@@ -268,6 +287,8 @@ function AddOrderLineItem(formId) {
             }
             $("#order-total").text("$" + response.order_total);
             $("#id_quantity").val(1);
+            $("#id_discount_percent").val("");
+            $("#id_manager_approved").prop("checked", false);
             $productSelect.val("");
         }).fail(function (xhr) {
             // A validation failure (order_add_line's own 400/403 JsonResponse,
@@ -279,5 +300,73 @@ function AddOrderLineItem(formId) {
             const messages = xhr.responseJSON ? messagesFrom(xhr.responseJSON.errors) : [];
             showError(messages.join(" ") || "Something went wrong adding that to your cart -- try again.");
         });
+    });
+}
+
+
+/*
+ * SetUpProductFilter -- narrows order_build.html's Product dropdown as the
+ * user types in the search box or picks a category (enhancement #2). Purely
+ * a usability aid: it only changes which <option>s are listed, never what
+ * gets submitted -- order_add_line still validates the chosen product and
+ * quantity on the server. The full option list is remembered once at load
+ * and the <select> is rebuilt from it on every change, since hiding
+ * <option> elements isn't reliable across browsers.
+ */
+function SetUpProductFilter() {
+    const $select = $("#id_product");
+    const $text = $("#product-filter-text");
+    const $category = $("#product-filter-category");
+    const $count = $("#product-filter-count");
+    if (!$select.length || !$text.length) {
+        return;
+    }
+
+    // {product_id: category_id} sent by order_build (_product_picker_context).
+    const categoryElement = document.getElementById("product-category-map");
+    const categoryMap = categoryElement ? JSON.parse(categoryElement.textContent) : {};
+
+    const placeholderText = $select.find("option[value='']").text() || "Select a product...";
+    const allOptions = Array.from($select[0].options)
+        .filter((option) => option.value !== "")
+        .map((option) => ({ value: option.value, text: option.text }));
+
+    function applyFilter() {
+        const needle = $text.val().trim().toLowerCase();
+        const categoryId = $category.val();
+        const previous = $select.val();
+
+        const matches = allOptions.filter(
+            (option) =>
+                (!needle || option.text.toLowerCase().includes(needle)) &&
+                (!categoryId || String(categoryMap[option.value]) === categoryId)
+        );
+
+        $select.empty().append(new Option(placeholderText, ""));
+        matches.forEach((option) => $select.append(new Option(option.text, option.value)));
+        // Keep the previous choice if it's still in the list.
+        $select.val(matches.some((option) => option.value === previous) ? previous : "");
+        // Tell the stock-limit code (AddOrderLineItem) the selection may have changed.
+        $select.trigger("change");
+
+        $count.text(
+            matches.length === allOptions.length
+                ? ""
+                : matches.length + " of " + allOptions.length + " products shown"
+        );
+    }
+
+    $text.on("input", applyFilter);
+    $category.on("change", applyFilter);
+    // Enter in the search box would otherwise submit the whole Add to Cart form.
+    $text.on("keydown", function (event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+        }
+    });
+    $("#product-filter-reset").on("click", function () {
+        $text.val("");
+        $category.val("");
+        applyFilter();
     });
 }

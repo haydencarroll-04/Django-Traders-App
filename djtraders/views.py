@@ -100,6 +100,22 @@ def _order_access_denied(request, order):
     return order.customer_id != logged_in_customer_id
 
 
+def _cart_access_denied(request, customer_id):
+    """
+    True if the current session may NOT use this customer's shopping cart
+    -- neither an employee (who can start and build a cart on behalf of any
+    customer) nor that customer's own logged-in session. Same shape as
+    _customer_edit_denied below; used by every cart view (order_create/
+    build/add_line/remove_line/clear_cart/commit).
+
+    The cart itself is still just request.session["cart"], tagged with the
+    customer_id it belongs to -- only who is allowed to touch it changed.
+    """
+    if request.session.get("current_user"):
+        return False
+    return request.session.get("customer_id") != customer_id
+
+
 def _customer_edit_denied(request, customer_id):
     """
     True if the current session may NOT edit this customer_id -- neither
@@ -353,7 +369,7 @@ def customer_detail(request, customer_id):
 
     # "Start New Order" is self-service only -- only the logged-in
     # customer viewing their own page gets the button.
-    can_start_order = request.session.get("customer_id") == customer.customer_id
+    can_start_order = not _cart_access_denied(request, customer.customer_id)
 
     context = {
         "customer": customer,
@@ -706,6 +722,11 @@ def employee_detail(request, employee_id):
     context = {"employee": employee}
     return render(request, "djtraders/employee_detail.html", context)
 
+# Volume discount (Extra Credit A): a line with MORE THAN this many units
+# automatically gets this rate off, with nothing typed in. It never stacks
+# with an employee-entered discount -- the line gets the larger of the two.
+VOLUME_DISCOUNT_THRESHOLD = 10
+VOLUME_DISCOUNT_RATE = 0.10
 
 def _cart_lines(cart):
     """
@@ -718,11 +739,9 @@ def _cart_lines(cart):
     running total can be built exactly the same way as when these are
     real rows, with no template changes needed either way.
 
-    discount is always 0.0 here -- nothing on this page collects one.
-    unit_price is each product's *current* price, looked up fresh every
-    time this runs (including at commit), not frozen at the moment a
-    line was added -- there's nothing to freeze it onto before an Order
-    row exists.
+    discount comes from cart["discounts"], a {str(product_id): fraction}
+    dict kept beside "lines" (0.10 = 10%, same as OrderDetail.discount);
+    0.0 when none was entered.
 
     A cart line whose product_id no longer resolves to a real product
     (e.g. deleted) is silently skipped rather than raising -- nothing
@@ -731,22 +750,43 @@ def _cart_lines(cart):
     product_ids = [int(product_id) for product_id in cart.get("lines", {})]
     products_by_id = Product.objects.in_bulk(product_ids)
 
+    discounts = cart.get("discounts", {})
     lines = []
     for product_id_str, quantity in cart.get("lines", {}).items():
         product = products_by_id.get(int(product_id_str))
         if product is None:
             continue
         unit_price = product.unit_price or 0.0
+        manual_discount = discounts.get(product_id_str, 0.0)
+        volume_discount = VOLUME_DISCOUNT_RATE if quantity > VOLUME_DISCOUNT_THRESHOLD else 0.0
+        # The better of the two, never both added together.
+        discount = max(manual_discount, volume_discount)
         lines.append(
             SimpleNamespace(
                 product=product,
                 unit_price=unit_price,
                 quantity=quantity,
-                discount=0.0,
-                line_total=unit_price * quantity,
+                discount=discount,
+                discount_percent=round(discount * 100, 2),
+                is_volume_discount=volume_discount > 0 and volume_discount >= manual_discount,
+                line_total=unit_price * quantity * (1 - discount),
             )
         )
     return lines
+
+
+def _product_picker_context(detail_form):
+    """
+    Extra context for order_build.html's product picker (enhancement #2):
+    the Category dropdown's choices, plus {product_id: category_id} for
+    every product the Product dropdown offers, so the browser can narrow
+    that list as the user types or picks a category -- no extra request.
+    """
+    products = detail_form.fields["product"].queryset
+    return {
+        "categories": Category.objects.order_by("category_name"),
+        "product_category_map": {p.product_id: p.category_id for p in products},
+    }
 
 
 def order_create(request, customer_id):
@@ -769,7 +809,7 @@ def order_create(request, customer_id):
 
     Redirects straight into order_build to start adding line items.
     """
-    if request.session.get("customer_id") != customer_id:
+    if _cart_access_denied(request, customer_id):
         return redirect("djtraders:customer_detail", customer_id=customer_id)
 
     if request.method != "POST":
@@ -807,7 +847,7 @@ def order_build(request, customer_id):
     to reach a working cart page, even without ever visiting
     order_create first (e.g. a bookmarked or re-typed URL).
     """
-    if request.session.get("customer_id") != customer_id:
+    if _cart_access_denied(request, customer_id):
         return redirect("djtraders:customer_detail", customer_id=customer_id)
 
     customer = get_object_or_404(Customer, pk=customer_id)
@@ -819,7 +859,7 @@ def order_build(request, customer_id):
 
     cart_lines = _cart_lines(cart)
     cart_total = sum(line.line_total for line in cart_lines)
-    detail_form = OrderDetailForm()
+    detail_form = OrderDetailForm(is_employee=bool(request.session.get("current_user")))
     # required_date/shipped_date default to a business-convention guess
     # (order_date, today at commit, plus two weeks / one week) but stay
     # real, editable fields on this form -- see OrderCommitForm/
@@ -828,6 +868,7 @@ def order_build(request, customer_id):
         initial={
             "required_date": default_required_date(),
             "shipped_date": default_shipped_date(),
+            "employee": request.session.get("current_user"),
         }
     )
 
@@ -836,6 +877,8 @@ def order_build(request, customer_id):
         "cart_lines": cart_lines,
         "cart_total": cart_total,
         "detail_form": detail_form,
+        "stock_map": {p.product_id: (p.units_in_stock or 0) for p in detail_form.fields["product"].queryset},
+        **_product_picker_context(detail_form),
         "commit_form": commit_form,
     }
     return render(request, "djtraders/order_build.html", context)
@@ -861,7 +904,7 @@ def order_add_line(request, customer_id):
     units_in_stock -- adding more than what's technically in stock is
     not refused here.
     """
-    if request.session.get("customer_id") != customer_id:
+    if _cart_access_denied(request, customer_id):
         return JsonResponse({"success": False, "errors": {"__all__": ["Not allowed."]}}, status=403)
 
     cart = request.session.get("cart")
@@ -871,7 +914,11 @@ def order_add_line(request, customer_id):
             status=400,
         )
 
-    form = OrderDetailForm(request.POST)
+    form = OrderDetailForm(
+        request.POST,
+        in_cart=cart["lines"],
+        is_employee=bool(request.session.get("current_user")),
+    )
     if not form.is_valid():
         # get_json_data(), not the bare ErrorDict form.errors itself --
         # Django's own error objects aren't directly JSON-serializable;
@@ -884,6 +931,9 @@ def order_add_line(request, customer_id):
 
     product_key = str(product.product_id)
     cart["lines"][product_key] = cart["lines"].get(product_key, 0) + quantity
+    discount_percent = form.cleaned_data.get("discount_percent")
+    if discount_percent is not None:
+        cart.setdefault("discounts", {})[product_key] = discount_percent / 100
     # Session middleware only notices a *replaced* top-level key by
     # default -- mutating cart["lines"] in place (as just above) doesn't
     # trigger that on its own, so this has to be set explicitly or the
@@ -893,8 +943,11 @@ def order_add_line(request, customer_id):
     cart_lines = _cart_lines(cart)
     line = next(line for line in cart_lines if line.product.product_id == product.product_id)
     row_html = render_to_string(
-        "djtraders/_order_line_row.html", {"line": line}, request=request
+        "djtraders/_order_line_row.html",
+        {"line": line, "customer_id": customer_id},
+        request=request,
     )
+
     cart_total = sum(line.line_total for line in cart_lines)
     return JsonResponse(
         {
@@ -904,6 +957,46 @@ def order_add_line(request, customer_id):
             "order_total": f"{cart_total:,.2f}",
         }
     )
+
+def order_remove_line(request, customer_id, product_id):
+    """
+    Removes one product from the session cart entirely (not just a lower
+    quantity). There's no database row to delete before commit -- the cart
+    is just request.session["cart"]["lines"], a {str(product_id): quantity}
+    dict, so this pops one key. POST-only, same self-service access check
+    as order_add_line/order_commit.
+    """
+    if _cart_access_denied(request, customer_id):
+        return redirect("djtraders:customer_detail", customer_id=customer_id)
+
+    cart = request.session.get("cart")
+    if request.method == "POST" and cart and cart.get("customer_id") == customer_id:
+        cart["lines"].pop(str(product_id), None)
+        cart.get("discounts", {}).pop(str(product_id), None) 
+        # Mutating the nested dict in place isn't noticed by the session
+        # middleware on its own -- same reason order_add_line sets this.
+        request.session.modified = True
+
+    return redirect("djtraders:order_build", customer_id=customer_id)
+
+
+def order_clear_cart(request, customer_id):
+    """
+    Empties the session cart without committing it:
+    request.session["cart"]["lines"] = {}. Nothing is written to the
+    database. POST-only, same access check as order_remove_line.
+    """
+    if _cart_access_denied(request, customer_id):
+        return redirect("djtraders:customer_detail", customer_id=customer_id)
+
+    cart = request.session.get("cart")
+    if request.method == "POST" and cart and cart.get("customer_id") == customer_id:
+        cart["lines"] = {}
+        cart["discounts"] = {}
+        request.session.modified = True
+
+    return redirect("djtraders:order_build", customer_id=customer_id)
+
 
 
 def order_commit(request, customer_id):
@@ -931,7 +1024,7 @@ def order_commit(request, customer_id):
     there is no employee-side access to someone else's session cart
     here, unlike order_detail/order_delete's own _order_access_denied.
     """
-    if request.session.get("customer_id") != customer_id:
+    if _cart_access_denied(request, customer_id):
         return redirect("djtraders:customer_detail", customer_id=customer_id)
 
     if request.method != "POST":
@@ -958,29 +1051,59 @@ def order_commit(request, customer_id):
         order.ship_postal_code = customer.postal_code
         order.ship_country = customer.country
 
+        stock_problems = []
         with transaction.atomic():
-            order.save()
-            OrderDetail.objects.bulk_create(
-                OrderDetail(
-                    order=order,
-                    product=line.product,
-                    unit_price=line.unit_price,
-                    quantity=line.quantity,
-                    discount=line.discount,
-                )
-                for line in cart_lines
+            # select_for_update() locks these product rows until the
+            # transaction ends, so two buyers can't both take the last units.
+            # The stock is re-read here, not trusted from when the line was
+            # added -- someone else may have bought it since.
+            locked = Product.objects.select_for_update().in_bulk(
+                [line.product.product_id for line in cart_lines]
             )
+            for line in cart_lines:
+                product = locked[line.product.product_id]
+                available = product.units_in_stock or 0
+                if line.quantity > available:
+                    stock_problems.append(
+                        f"{product.product_name}: only {available} in stock now, "
+                        f"but your cart has {line.quantity}."
+                    )
 
-        del request.session["cart"]
-        return redirect("djtraders:customer_detail", customer_id=customer_id)
+            if not stock_problems:
+                order.save()
+                OrderDetail.objects.bulk_create(
+                    OrderDetail(
+                        order=order,
+                        product=line.product,
+                        unit_price=line.unit_price,
+                        quantity=line.quantity,
+                        discount=line.discount,
+                    )
+                    for line in cart_lines
+                )
+                for line in cart_lines:
+                    product = locked[line.product.product_id]
+                    product.units_in_stock = (product.units_in_stock or 0) - line.quantity
+                Product.objects.bulk_update(locked.values(), ["units_in_stock"])
+
+        if stock_problems:
+            # Nothing was written. Fall through to the re-render below, which
+            # shows these in the Place Order card.
+            for message in stock_problems:
+                form.add_error(None, message)
+        else:
+            del request.session["cart"]
+            return redirect("djtraders:customer_detail", customer_id=customer_id)
 
     cart_total = sum(line.line_total for line in cart_lines)
-    detail_form = OrderDetailForm()
+    detail_form = OrderDetailForm(is_employee=bool(request.session.get("current_user")))
     context = {
         "customer": customer,
         "cart_lines": cart_lines,
         "cart_total": cart_total,
         "detail_form": detail_form,
+        "stock_map": {p.product_id: (p.units_in_stock or 0) for p in detail_form.fields["product"].queryset},
+        **_product_picker_context(detail_form),
         "commit_form": form,
     }
     return render(request, "djtraders/order_build.html", context)
