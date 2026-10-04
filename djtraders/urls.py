@@ -95,6 +95,11 @@ customer_login_url = path(
     "customer-login/", views.customer_login_view, name="customer_login"
 )
 
+# GET/POST /djtraders/customer-signup/ -> views.customer_signup
+customer_signup_url = path(
+    "customer-signup/", views.customer_signup, name="customer_signup"
+)
+
 # GET /djtraders/customer-logout/ -> views.customer_logout_view
 customer_logout_url = path(
     "customer-logout/", views.customer_logout_view, name="customer_logout"
@@ -186,6 +191,7 @@ urlpatterns = [
     logout_url,
     product_detail_url,
     customer_login_url,
+    customer_signup_url,
     customer_logout_url,
     customer_edit_form_url,
     customer_edit_url,

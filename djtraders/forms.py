@@ -237,6 +237,120 @@ class CustomerEditForm(forms.ModelForm):
             raise ValidationError("City can't contain numbers.")
         return city
 
+
+class CustomerSignupForm(CustomerEditForm):
+    """
+    The public "Create a FREE Account" form (customer_signup, djtraders/
+    views.py) -- a brand-new customer registering themselves, instead of an
+    employee adding one on their behalf (customer_create).
+
+    Built on CustomerEditForm, so every field and every validation rule a
+    customer already has (phone format, no digits in the company name or
+    city, contact name required, the browser-layer pattern= attributes)
+    applies here unchanged. It asks for every column the customers table
+    tracks, except the two the system fills in itself: customer_id
+    (generated from the company name, Customer.generate_customer_id) and
+    inactive_date (left blank, so a new account starts out active).
+
+    What this form adds on top of CustomerEditForm:
+      - password is required (the model allows it blank, so that is a form
+        rule, the same "form is stricter than the column" shape as
+        contact_name), asked for twice, and never echoed back into the page
+        after an error (render_value=False). strip=False keeps the
+        characters exactly as typed, because customer_login_view compares
+        the raw, unstripped password.
+      - company_name can't already have an account. The login page picks a
+        customer from a dropdown of company names, so two accounts sharing
+        a name would be indistinguishable there. Nothing in the database
+        enforces this (only customer_id is unique), so this check is the
+        only thing that does.
+    """
+    confirm_password = forms.CharField(
+        label="Confirm password",
+        max_length=64,
+        strip=False,
+        widget=forms.PasswordInput(render_value=False),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["password"].required = True
+        self.fields["password"].strip = False
+        self.fields["password"].widget.render_value = False
+        self.fields["password"].widget.attrs["autocomplete"] = "new-password"
+        self.fields["confirm_password"].widget.attrs["autocomplete"] = "new-password"
+
+        # Replaces the layout CustomerEditForm.__init__ just built: the same
+        # field grid, with the password pair added and Create/Cancel buttons
+        # that point at the login page instead of a customer page.
+        self.helper.form_id = "customer-signup-form"
+        self.helper.layout = Layout(
+            Row(
+                Column("company_name", css_class="col-md-6"),
+                Column("contact_name", css_class="col-md-6"),
+            ),
+            Row(
+                Column("contact_title", css_class="col-md-4"),
+                Column("phone", css_class="col-md-4"),
+                Column("fax", css_class="col-md-4"),
+            ),
+            Row(
+                Column("address", css_class="col-md-8"),
+                Column("city", css_class="col-md-4"),
+            ),
+            Row(
+                Column("region", css_class="col-md-4"),
+                Column("postal_code", css_class="col-md-4"),
+                Column("country", css_class="col-md-4"),
+            ),
+            Row(
+                Column("password", css_class="col-md-6"),
+                Column("confirm_password", css_class="col-md-6"),
+            ),
+            HTML(
+                """
+                <div class="d-flex gap-2 mt-3 justify-content-end">
+                    <button type="submit" class="btn dt-btn-primary-customer w3-hover-shadow" title="Create your account">
+                        <i class="fa-solid fa-user-plus me-1 dt-icon-success"></i>Create My Account
+                    </button>
+                    <div class="dt-link-wrap btn dt-btn-secondary-customer w3-hover-shadow">
+                        <a href="{% url 'djtraders:customer_login' %}" title="Cancel -- no account will be created">
+                            <i class="fa-solid fa-xmark me-1 dt-icon-danger"></i>Cancel
+                        </a>
+                    </div>
+                </div>
+                """
+            ),
+        )
+
+    def clean_company_name(self):
+        """
+        Server layer of the "one account per company" rule. Runs the
+        no-digits check from CustomerEditForm first (super()), then refuses
+        a company name that already has an account -- compared
+        case-insensitively, so "acme foods" can't sneak past "Acme Foods".
+        """
+        name = super().clean_company_name()
+        if Customer.objects.filter(company_name__iexact=name).exists():
+            raise ValidationError(
+                "An account for this company already exists -- please log in instead."
+            )
+        return name
+
+    def clean(self):
+        """
+        Server layer of the password confirmation. Needs both password
+        fields together, so it's a cross-field clean() rather than a
+        clean_<field>() -- the same shape as OrderCommitForm.clean().
+        """
+        cleaned_data = super().clean()
+        password = cleaned_data.get("password")
+        confirm = cleaned_data.get("confirm_password")
+        if password and confirm and password != confirm:
+            self.add_error("confirm_password", "The two passwords don't match.")
+        return cleaned_data
+
+
 MAX_FREE_DISCOUNT_PERCENT = 10
 class OrderDetailForm(forms.ModelForm):
     """

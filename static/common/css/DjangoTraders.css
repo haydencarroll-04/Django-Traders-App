@@ -629,3 +629,11 @@ td form + form {
 .dt-lead-narrow {
   max-width: 640px;
 }
+
+/* For a long centered heading (e.g. the project home page's "Welcome to The
+   Marketplace at Carroll Trading Company"): when it has to wrap, split the
+   lines evenly instead of leaving one or two words stranded on the last
+   line. Browsers that don't support text-wrap: balance just wrap normally. */
+.dt-heading-balance {
+  text-wrap: balance;
+}

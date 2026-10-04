@@ -1,0 +1,47 @@
+<!--
+    "Create a FREE Account" page (djtraders/views.py's customer_signup),
+    reached from the button on customer_login.html. "form" is a
+    CustomerSignupForm (djtraders/forms.py), rendered by django-crispy-forms
+    the same way customer_edit.html renders CustomerEditForm -- the same
+    fields and field grid, plus a password / confirm-password row and its
+    own Create / Cancel buttons (Cancel goes back to the login page). The
+    crispy tag below draws every field and both buttons from that class.
+
+    Open to anyone, no login needed. A successful submit creates the
+    customer, logs them straight in, and lands them on their own customer
+    page with a welcome message (shown by base.html).
+
+    The browser-layer checks are the same ones the employee edit page uses:
+    ValidateCustomerEditForm (DjangoTraders.js), pointed at this form's own
+    id instead. The real validation stays on the server.
+-->
+{% extends "common/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Create a Free Account{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card mt-4 border-0 shadow-sm">
+                <div class="card-header fw-bolder h4">
+                    <i class="fa-solid fa-user-plus dt-icon"></i>
+                    Create Your Free Account
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Tell us about your company to start ordering from The Marketplace at
+                        Carroll Trading Company. Fields marked with * are required.
+                    </p>
+                    {% crispy form %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        ValidateCustomerEditForm('#customer-signup-form');
+    </script>
+{% endblock %}

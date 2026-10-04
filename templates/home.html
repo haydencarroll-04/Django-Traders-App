@@ -24,7 +24,7 @@
 {% extends "common/base.html" %}
 {% load static %}
 
-{% block title %}DjangoTraders{% endblock %}
+{% block title %}The Marketplace at Carroll Trading Company{% endblock %}
 
 {% block content %}
     {% if confirm_logout %}
@@ -67,10 +67,10 @@
         </div>
     {% else %}
         <div class="text-center py-5">
-            <h1 class="display-4 mb-4">Welcome to DjangoTraders</h1>
+            <h1 class="display-4 mb-4 dt-heading-balance">Welcome to The Marketplace at Carroll Trading Company</h1>
             <div class="dt-link-wrap d-inline-block w3-hover-shadow">
                 <a href="{% url 'djtraders:home' %}">
-                    <img src="{% static 'common/images/logo-large.svg' %}" alt="Go to the djTraders app">
+                    <img src="{% static 'common/images/logo-large.svg' %}" alt="Go to The Marketplace">
                 </a>
             </div>
         </div>

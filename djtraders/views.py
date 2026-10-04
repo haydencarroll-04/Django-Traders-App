@@ -37,13 +37,14 @@ already-placed order on the same day it was placed.
 
 from types import SimpleNamespace
 
-from django.db import transaction
+from django.contrib import messages
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .forms import CustomerEditForm, OrderCommitForm, OrderDetailForm, ProductEditForm, default_required_date, default_shipped_date
+from .forms import CustomerEditForm, CustomerSignupForm, OrderCommitForm, OrderDetailForm, ProductEditForm, default_required_date, default_shipped_date
 from .models import Category, Customer, Employee, Order, OrderDetail, Product, Supplier
 
 
@@ -689,6 +690,70 @@ def customer_login_view(request):
     customers = Customer.objects.order_by("company_name")
     context = {"customers": customers, "error": error}
     return render(request, "djtraders/customer_login.html", context)
+
+
+def customer_signup(request):
+    """
+    Public "Create a FREE Account" page, linked from customer_login.html:
+    a brand-new customer registers themselves. Compare to customer_create,
+    the employee-only version of the same idea, where an employee adds a
+    customer on their behalf and nobody is logged in as a result.
+
+    CustomerSignupForm (djtraders/forms.py) asks for every column the
+    customers table tracks, except customer_id (generated here, from the
+    validated company name, by Customer.generate_customer_id -- a customer
+    never picks it) and inactive_date (left blank, so the account starts
+    out active). Nothing is written until the whole form passes validation.
+
+    On success the new customer is logged straight in (the same
+    "customer_id" session key customer_login_view sets) and sent to their
+    own customer_detail page with a welcome message, instead of being made
+    to find their company in the login dropdown they just joined.
+
+    Same one-session-at-a-time rule as the two login views: landing on this
+    page logs out whoever was logged in before, employee or customer.
+
+    The ID is generated and saved inside one transaction, as an insert-only
+    save. If two people register the same company name at the very same
+    instant, both can be handed the same ID and the database's primary key
+    rejects the second -- shown as an ordinary "try again" form error
+    rather than a server error (or, worse, overwriting the first customer).
+    """
+    request.session.pop("current_user", None)
+    request.session.pop("customer_id", None)
+
+    if request.method == "POST":
+        form = CustomerSignupForm(request.POST, instance=Customer())
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    form.instance.customer_id = Customer.generate_customer_id(
+                        form.cleaned_data["company_name"]
+                    )
+                    # force_insert=True: a plain save() on a row whose primary
+                    # key is already set quietly UPDATES an existing row with
+                    # that ID instead of failing, so a collision would
+                    # overwrite another customer. Insert-only makes the
+                    # database's primary key reject it, caught just below.
+                    customer = form.save(commit=False)
+                    customer.save(force_insert=True)
+            except IntegrityError:
+                form.add_error(
+                    None, "We couldn't create your account just now -- please try again."
+                )
+            else:
+                request.session["customer_id"] = customer.customer_id
+                messages.success(
+                    request,
+                    "Welcome to The Marketplace at Carroll Trading Company, "
+                    f"{customer.company_name}! Your account has been created and "
+                    "you're logged in.",
+                )
+                return redirect("djtraders:customer_detail", customer_id=customer.customer_id)
+    else:
+        form = CustomerSignupForm(instance=Customer())
+
+    return render(request, "djtraders/customer_signup.html", {"form": form})
 
 
 def customer_logout_view(request):

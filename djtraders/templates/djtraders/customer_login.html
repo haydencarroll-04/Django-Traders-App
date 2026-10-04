@@ -58,6 +58,16 @@
                         </button>
                     </form>
 
+                    {# A plain link, not a form: it only opens the sign-up page (customer_signup) and changes nothing by itself. #}
+                    <hr class="my-4">
+                    <div class="dt-link-wrap btn dt-btn-secondary-customer border w3-hover-shadow w-100">
+                        <a href="{% url 'djtraders:customer_signup' %}" title="Create a free customer account">
+                            <i class="fa-solid fa-user-plus me-2"></i>
+                            {# The span keeps the text one flex item, so the <br> works; it only breaks the line on wider screens. #}
+                            <span>New to Carroll Trading Company? <br class="d-none d-lg-inline">Create a FREE Account!</span>
+                        </a>
+                    </div>
+
                     <div class="text-center mt-3">
                         <div class="dt-link-wrap btn btn-sm dt-btn-secondary-employee w3-hover-shadow">
                             <a href="{% url 'djtraders:login' %}" title="Log in as an employee">

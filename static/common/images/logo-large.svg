@@ -3,7 +3,8 @@
   <rect x="16" y="16" width="56" height="56" rx="12" fill="aliceblue"/>
   <polygon points="24,26 24,62 44,44" fill="steelblue"/>
   <polygon points="64,26 64,62 44,44" fill="goldenrod"/>
-  <text x="86" y="50" font-family="'Segoe UI', Tahoma, 'Trebuchet MS', sans-serif" font-size="34" font-weight="600" letter-spacing="-0.3">
-    <tspan fill="darkslategray">Django</tspan><tspan fill="steelblue">Traders</tspan>
+  <text x="86" y="44" font-family="'Segoe UI', Tahoma, 'Trebuchet MS', sans-serif" font-size="30" font-weight="600" letter-spacing="-0.3">
+    <tspan fill="darkslategray">The </tspan><tspan fill="steelblue">Marketplace</tspan>
   </text>
+  <text x="87" y="64" font-family="'Segoe UI', Tahoma, 'Trebuchet MS', sans-serif" font-size="15" font-weight="500" fill="dimgray">at Carroll Trading Company</text>
 </svg>

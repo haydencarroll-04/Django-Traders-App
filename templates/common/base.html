@@ -61,8 +61,8 @@
       <head>
             <meta charset="UTF-8">
             <meta name="description"
-                  content="{% block description %}DJ Traders - Trade with confidence{% endblock %}">
-            <title>{% block title %}DJ Traders{% endblock %}</title>
+                  content="{% block description %}The Marketplace at Carroll Trading Company - Trade with confidence{% endblock %}">
+            <title>{% block title %}The Marketplace{% endblock %}</title>
             {# Browser tab icon -- reuses the existing logo mark instead of a #}
             {# separate favicon.ico file; without this the browser requests #}
             {# /favicon.ico automatically and logs a 404 on every page. #}
@@ -98,15 +98,15 @@
                         </div>
 
                         <div class="dt-link-wrap w3-hover-shadow d-inline-flex rounded-2"
-                             title="djTraders App Home">
+                             title="The Marketplace Home">
                               <a href="{% url 'djtraders:home' %}">
                                     <img src="{% static 'common/images/logo-small.svg' %}"
-                                         alt="djTraders application logo linking to the app home page"
+                                         alt="The Marketplace logo linking to the marketplace home page"
                                          height="50">
                               </a>
                         </div>
                   </div>
-                  <div class="fw-bold fs-4">DjangoTraders</div>
+                  <div class="fw-bold fs-4">Carroll Trading Company</div>
                   <div class="d-flex align-items-center gap-3">
                         {# current_customer (djtraders/session_context.py) is None when no customer's logged in. #}
                         {% if current_customer %}
@@ -155,6 +155,13 @@
             </nav>
 
             <div class="container p-4 dt-content-container">
+                  {# One-time notices from Django's messages framework (e.g. customer_signup's #}
+                  {# "account created" welcome) -- each is shown once, then cleared. #}
+                  {% for message in messages %}
+                        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %}" role="alert">
+                              {{ message }}
+                        </div>
+                  {% endfor %}
                   {# Each child template fills this block with its own #}
                   {# heading, intro text, and table -- see customer_list.html. #}
                   {% block content %}
