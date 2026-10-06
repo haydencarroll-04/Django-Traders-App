@@ -894,10 +894,11 @@ def order_build(request, customer_id):
     request.session["cart"] (a plain {"customer_id": ...,
     "lines": {product_id: quantity}} dict, see _cart_lines above) and a
     fresh Customer/Product lookup, never a database Order. The Place
-    Order card's "Shipping To" block is the logged-in customer's own
-    on-file address, read live off Customer every time this renders
-    (order_commit copies that same, current address onto the real
-    Order's ship_* columns at commit). OrderCommitForm's employee field
+    Order card's "Ship To" fields start out filled in with the customer's
+    own on-file address, read live off Customer every time this renders,
+    but they are real, editable form fields (OrderCommitForm) -- order_commit
+    saves whatever was submitted onto the Order's ship_* columns.
+    OrderCommitForm's employee field
     is required -- no order commits without one picked, a business rule,
     not a database one (see that form's own docstring, djtraders/forms.py).
 
@@ -934,6 +935,12 @@ def order_build(request, customer_id):
             "required_date": default_required_date(),
             "shipped_date": default_shipped_date(),
             "employee": request.session.get("current_user"),
+            "ship_name": customer.company_name,
+            "ship_address": customer.address,
+            "ship_city": customer.city,
+            "ship_region": customer.region,
+            "ship_postal_code": customer.postal_code,
+            "ship_country": customer.country,
         }
     )
 
@@ -1068,9 +1075,8 @@ def order_commit(request, customer_id):
     """
     Places the cart -- the one point where any of it is written to the
     database at all. Builds one real Order (order_date set to today,
-    employee/required_date/shipped_date from OrderCommitForm, ship_*
-    copied from the customer's own current address, same as
-    order_build's own read-only display) and one real OrderDetail per
+    employee/required_date/shipped_date and the ship_* ship-to address,
+    all from OrderCommitForm) and one real OrderDetail per
     cart line, inside a single transaction -- either the whole order is
     written, or, on any failure partway through, none of it is left
     half-written behind. The session cart is only cleared after that
@@ -1109,12 +1115,8 @@ def order_commit(request, customer_id):
         order = form.save(commit=False)
         order.customer = customer
         order.order_date = timezone.now().date()
-        order.ship_name = customer.company_name
-        order.ship_address = customer.address
-        order.ship_city = customer.city
-        order.ship_region = customer.region
-        order.ship_postal_code = customer.postal_code
-        order.ship_country = customer.country
+        # The ship_* columns are not set here: form.save(commit=False) above has
+        # already filled them from the Ship To section (OrderCommitForm).
 
         stock_problems = []
         with transaction.atomic():

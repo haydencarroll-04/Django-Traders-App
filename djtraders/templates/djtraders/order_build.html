@@ -14,10 +14,11 @@
     AddOrderLineItem (DjangoTraders.js), which POSTs to order_add_line and
     patches the table and running total in place, with no page reload.
 
-    The Place Order card shows the logged-in customer's own current on-file
-    address (customer.formatted_address, djtraders/models.py) read live, so
-    they can confirm where it ships before committing; order_commit copies
-    that same address onto the real Order's ship_* columns at commit time.
+    The Place Order card's Ship To section is a real, validated form
+    (OrderCommitForm's ship_* fields, djtraders/forms.py). It starts out
+    filled in with the customer's own on-file address, read live, but the
+    customer can change any of it; order_commit saves whatever was
+    submitted onto the real Order's ship_* columns at commit time.
     Commit requires picking an employee (OrderCommitForm's employee field,
     djtraders/forms.py) as a business rule, not a database one, and is a
     separate POST (order_commit) that is the only point anything on this
@@ -158,13 +159,6 @@
                     {% if commit_form.non_field_errors %}
                         <div class="alert alert-danger">{{ commit_form.non_field_errors }}</div>
                     {% endif %}
-                    <div class="mb-3">
-                        <div class="form-label mb-1">Shipping To</div>
-                        <div class="border rounded p-2 bg-light">
-                            <div class="fw-bold">{{ customer.company_name }}</div>
-                            <div>{{ customer.formatted_address }}</div>
-                        </div>
-                    </div>
                     <form method="post" action="{% url 'djtraders:order_commit' customer.customer_id %}">
                         {% csrf_token %}
                         <div class="mb-3">
@@ -188,6 +182,22 @@
                                 <div class="text-danger small">{{ commit_form.shipped_date.errors }}</div>
                             {% endif %}
                         </div>
+                        <div class="fw-bold mt-4 mb-1">Ship To</div>
+                        <div class="form-text mb-3">
+                            Filled in from the address on file for {{ customer.company_name }}.
+                            Change any of it to ship this order somewhere else.
+                        </div>
+                        {% for field in commit_form %}
+                            {% if field.name|slice:":5" == "ship_" %}
+                                <div class="mb-3">
+                                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+                                    {{ field }}
+                                    {% if field.errors %}
+                                        <div class="text-danger small">{{ field.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
                         <button type="submit" class="btn dt-btn-primary-customer w3-hover-shadow w-100" title="Place this order">
                             <i class="fa-solid fa-check me-1"></i>Commit Order
                         </button>

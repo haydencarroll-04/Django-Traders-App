@@ -63,6 +63,13 @@ PHONE_PATTERN = r"[0-9()\-\s]{7,20}"
 # the server-layer clean_<field>() checks.
 NO_DIGITS_PATTERN = r"[^0-9]*"
 
+# Letters, digits, spaces, and hyphens only, 3-10 characters -- loose enough
+# for "27402", "02389-673", "H1J 1C3", or "WA1 1DP", tight enough to reject
+# obvious garbage. Shared the same way PHONE_PATTERN is: by the widget's
+# pattern= attribute (browser layer) and OrderCommitForm.clean_ship_postal_code()
+# (server layer), so the two can never quietly drift apart.
+POSTAL_CODE_PATTERN = r"[A-Za-z0-9 \-]{3,10}"
+
 
 class CustomerEditForm(forms.ModelForm):
     """
@@ -497,6 +504,18 @@ class OrderCommitForm(forms.ModelForm):
     ModelForm behaves as a create form or an update form purely based
     on whether instance= was passed at construction, not on anything
     declared here.
+
+    The six ship_* fields are the order's ship-to address, which the
+    customer can change at commit time. order_build (djtraders/views.py)
+    pre-fills them from the customer's own on-file address, so leaving them
+    alone ships to the same place as before; order_commit then saves
+    whatever was submitted onto the Order, not the customer's address.
+    Validation has the usual three layers: browser (the required/pattern
+    attributes set in __init__), server (the clean_ship_*() methods below),
+    and the database (only the column lengths, which max_length mirrors).
+    Name, address, city, and country are required; region and postal code
+    stay optional, since many customers on file have no region and not
+    every country uses either one.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -510,13 +529,85 @@ class OrderCommitForm(forms.ModelForm):
         )
         self.fields["employee"].widget.attrs.update({"class": "form-select"})
 
+        # Ship-to address. Required: an order has to go somewhere. The model
+        # columns are all nullable (blank=True), so "required" is a form rule --
+        # the same "form is stricter than the column" shape as employee above.
+        # Region and postal code stay optional.
+        for name in ("ship_name", "ship_address", "ship_city", "ship_region",
+                     "ship_postal_code", "ship_country"):
+            self.fields[name].widget.attrs.update({"class": "form-control"})
+        for name in ("ship_name", "ship_address", "ship_city", "ship_country"):
+            self.fields[name].required = True
+        # Browser layer (courtesy only): the same patterns the clean_ship_*()
+        # methods below re-check on the server.
+        for name, label in (("ship_city", "city"), ("ship_region", "region"),
+                            ("ship_country", "country")):
+            self.fields[name].widget.attrs.update({
+                "pattern": NO_DIGITS_PATTERN,
+                "title": f"No numbers in a {label} name.",
+            })
+        self.fields["ship_postal_code"].widget.attrs.update({
+            "pattern": POSTAL_CODE_PATTERN,
+            "title": "Letters, numbers, spaces, and hyphens only (3-10 characters).",
+        })
+
     class Meta:
         model = Order
-        fields = ["employee", "required_date", "shipped_date"]
+        fields = [
+            "employee", "required_date", "shipped_date",
+            "ship_name", "ship_address", "ship_city", "ship_region",
+            "ship_postal_code", "ship_country",
+        ]
+        labels = {
+            "ship_name": "Name",
+            "ship_address": "Address",
+            "ship_city": "City",
+            "ship_region": "Region",
+            "ship_postal_code": "Postal Code",
+            "ship_country": "Country",
+        }
         widgets = {
             "required_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "shipped_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
         }
+
+    def _check_no_digits(self, field_name, label):
+        """
+        Shared by the three place-name checks below -- the same rule
+        CustomerEditForm.clean_city() enforces. Blank is fine (region is
+        optional, and the required ones are already refused before this runs).
+        """
+        value = self.cleaned_data.get(field_name, "")
+        if value and not re.fullmatch(NO_DIGITS_PATTERN, value):
+            raise ValidationError(f"{label} can't contain numbers.")
+        return value
+
+    def clean_ship_city(self):
+        """Server layer of the no-digits rule for the ship-to city."""
+        return self._check_no_digits("ship_city", "City")
+
+    def clean_ship_region(self):
+        """Server layer of the no-digits rule for the ship-to region."""
+        return self._check_no_digits("ship_region", "Region")
+
+    def clean_ship_country(self):
+        """Server layer of the no-digits rule for the ship-to country."""
+        return self._check_no_digits("ship_country", "Country")
+
+    def clean_ship_postal_code(self):
+        """
+        Server layer of the postal-code format rule. Optional: a blank code
+        skips the check entirely, the same way CustomerEditForm.clean_phone()
+        treats a blank phone. A non-blank code has to match POSTAL_CODE_PATTERN,
+        whether or not the browser's own pattern= check ran.
+        """
+        code = self.cleaned_data.get("ship_postal_code", "")
+        if code and not re.fullmatch(POSTAL_CODE_PATTERN, code):
+            raise ValidationError(
+                "Enter a valid postal code (letters, numbers, spaces, and hyphens only, "
+                "3-10 characters)."
+            )
+        return code
 
     def clean(self):
         """
