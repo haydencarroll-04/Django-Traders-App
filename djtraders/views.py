@@ -408,11 +408,17 @@ def customer_edit(request, customer_id):
     else:
         form = CustomerEditForm(instance=customer)
 
-    # confirm_delete=1 (customer_list.html's Delete icon) shows an
-    # in-page "are you sure?" prompt instead of the edit form -- see
-    # customer_edit.html. Its own Confirm button is a real POST to
-    # customer_delete, not a browser confirm() popup (see CLAUDE.md).
-    confirm_delete = request.GET.get("confirm_delete") == "1"
+    # confirm_delete=1 (customer_list.html's Delete icon, or the Delete
+    # button on this page's own employee action bar) shows an in-page
+    # "are you sure?" prompt instead of the edit form -- see
+    # customer_edit.html. Employee-only, like customer_delete itself: a
+    # customer editing their own record never sees the prompt, even with
+    # ?confirm_delete=1 typed into the address. Its own Confirm button is
+    # a real POST to customer_delete, not a browser confirm() popup (see
+    # CLAUDE.md).
+    confirm_delete = request.GET.get("confirm_delete") == "1" and bool(
+        request.session.get("current_user")
+    )
 
     context = {"customer": customer, "form": form, "confirm_delete": confirm_delete}
     return render(request, "djtraders/customer_edit.html", context)
@@ -475,7 +481,9 @@ def customer_delete(request, customer_id):
     Marks a customer inactive (sets inactive_date to today) instead of
     actually deleting the row -- reversible, and keeps their order
     history intact. Employee-only action, available from the Actions
-    column on customer_list.html; POST-only, since it changes data.
+    column on customer_list.html and from the employee action bar on
+    customer_edit.html (which asks "are you sure?" first); POST-only,
+    since it changes data.
     """
     if not request.session.get("current_user"):
         return redirect("djtraders:customer_list")
@@ -491,8 +499,9 @@ def customer_reactivate(request, customer_id):
     """
     Reverses customer_delete(): clears inactive_date so the customer is
     active again. Same access rule as Delete (employee-only) and same
-    POST-only convention, since it changes data. Order history is never
-    touched.
+    POST-only convention, since it changes data. Offered on
+    customer_list.html, customer_detail.html, and the employee action bar
+    on customer_edit.html. Order history is never touched.
     """
     if not request.session.get("current_user"):
         return redirect("djtraders:customer_list")

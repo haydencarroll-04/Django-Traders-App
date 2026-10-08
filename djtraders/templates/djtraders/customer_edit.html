@@ -9,12 +9,19 @@
     its fields, including the Save/Cancel buttons, as Bootstrap 5
     markup from the field list and layout that class declares.
 
-    When customer_list.html's Delete icon links here with
-    ?confirm_delete=1, the card body shows an in-page "are you sure?"
-    prompt instead of the form. Its Confirm button posts to
-    customer_delete (djtraders/views.py) rather than popping a browser
-    confirm() dialog. Cancel on that prompt goes back to the customer's
-    detail page rather than reopening this edit form.
+    When customer_list.html's Delete icon (or this page's own Delete
+    button, below) links here with ?confirm_delete=1, the card body shows
+    an in-page "are you sure?" prompt instead of the form. Its Confirm
+    button posts to customer_delete (djtraders/views.py) rather than
+    popping a browser confirm() dialog. Cancel on that prompt goes back to
+    the customer's detail page rather than reopening this edit form.
+
+    Employees also get an "Employee actions" bar at the bottom of the
+    card: Delete for an active customer, or Reactivate (a real POST to
+    customer_reactivate) for an inactive one. Neither the bar nor the
+    ?confirm_delete=1 prompt is ever shown to a customer editing their own
+    record, or on the New Customer page. Both actions send the employee
+    back to the Customers list, same as from the list's own icons.
 
     A hand-written jQuery validation call (ValidateCustomerEditForm,
     DjangoTraders.js, wired up in the scripts block below) illustrates
@@ -83,6 +90,34 @@
                         {% crispy form %}
                     {% endif %}
                 </div>
+                {# Employee-only: a customer editing their own record never sees this bar (customer_delete/customer_reactivate also refuse anyone who isn't an employee). #}
+                {% if current_employee and not new_customer and not confirm_delete %}
+                    <div class="card-footer bg-white border-top d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <span class="text-muted small">
+                            <i class="fa-solid fa-user-shield me-1"></i>Employee actions
+                            {% if customer.inactive_date %}-- inactive since {{ customer.inactive_date|date:"N j, Y" }}{% endif %}
+                        </span>
+                        {% if customer.inactive_date %}
+                            <form method="post"
+                                  action="{% url 'djtraders:customer_reactivate' customer.customer_id %}"
+                                  class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn dt-btn-primary-customer w3-hover-shadow" title="Reactivate this customer">
+                                    <i class="fa-solid fa-user-check me-1"></i>
+                                    Reactivate
+                                </button>
+                            </form>
+                        {% else %}
+                            <div class="dt-link-wrap btn btn-outline-danger bg-white text-black w3-hover-shadow">
+                                <a href="{% url 'djtraders:customer_edit' customer.customer_id %}?confirm_delete=1"
+                                   title="Delete this customer">
+                                    <i class="fa-solid fa-trash me-1"></i>
+                                    Delete
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
