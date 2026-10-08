@@ -90,6 +90,11 @@ product_delete_url = path(
     "products/<int:product_id>/delete/", views.product_delete, name="product_delete"
 )
 
+# POST /djtraders/products/<product_id>/renew/ -> views.product_renew
+product_renew_url = path(
+    "products/<int:product_id>/renew/", views.product_renew, name="product_renew"
+)
+
 # GET/POST /djtraders/customer-login/ -> views.customer_login_view
 customer_login_url = path(
     "customer-login/", views.customer_login_view, name="customer_login"
@@ -200,6 +205,7 @@ urlpatterns = [
     product_create_url,
     product_edit_url,
     product_delete_url,
+    product_renew_url,
     order_remove_line_url,
     order_clear_cart_url,
 ]

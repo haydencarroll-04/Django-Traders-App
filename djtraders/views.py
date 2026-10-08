@@ -318,7 +318,7 @@ def product_delete(request, product_id):
     """
     Soft delete: sets discontinued=1 and date_discontinued=today instead of
     removing the row, so order history stays intact. Employee-only and
-    POST-only, mirroring customer_delete.
+    POST-only, mirroring customer_delete. Reversed by product_renew below.
     """
     if not request.session.get("current_user"):
         return redirect("djtraders:product_list")
@@ -330,6 +330,28 @@ def product_delete(request, product_id):
         product.save()
 
     return redirect("djtraders:product_list")
+
+
+def product_renew(request, product_id):
+    """
+    Reverses product_delete(): sets discontinued back to 0 and clears
+    date_discontinued, so the product is back in the active catalog (and
+    in the cart's product dropdown). Same access rule as Discontinue
+    (employee-only) and same POST-only convention, since it changes
+    data. Offered on product_list.html and product_detail.html; order
+    history and stock levels are never touched.
+    """
+    if not request.session.get("current_user"):
+        return redirect("djtraders:product_list")
+
+    if request.method == "POST":
+        product = get_object_or_404(Product, pk=product_id)
+        product.discontinued = 0
+        product.date_discontinued = None
+        product.save()
+
+    return redirect("djtraders:product_list")
+
 
 def customer_detail(request, customer_id):
     """

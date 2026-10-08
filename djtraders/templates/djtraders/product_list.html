@@ -129,6 +129,16 @@
                             <a href="{% url 'djtraders:product_edit' product.product_id %}" title="Edit product" class="text-decoration-none px-2"><i class="fa-solid fa-pen fa-lg dt-icon-warning"></i></a>
                             {% if not product.is_discontinued %}
                                 <a href="{% url 'djtraders:product_edit' product.product_id %}?confirm_delete=1" title="Discontinue product" class="text-decoration-none px-2"><i class="fa-solid fa-trash fa-lg dt-icon-danger"></i></a>
+                            {% else %}
+                                {# Discontinued products (visible via "Show all products") get a Renew icon in place of the trash icon -- a POST form, since it changes data. #}
+                                <form method="post"
+                                      action="{% url 'djtraders:product_renew' product.product_id %}"
+                                      class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" title="Renew product" class="btn btn-link p-0 px-2">
+                                        <i class="fa-solid fa-arrows-rotate fa-lg dt-icon-success"></i>
+                                    </button>
+                                </form>
                             {% endif %}
                         {% endif %}
                     </td>

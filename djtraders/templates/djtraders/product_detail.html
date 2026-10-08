@@ -37,6 +37,16 @@
                             <i class="fa-solid fa-ban me-1"></i> Discontinue
                         </a>
                     </div>
+                {% else %}
+                    {# Renew changes data, so it's a real POST form button rather than a link -- same as customer_detail's Reactivate. #}
+                    <form method="post"
+                          action="{% url 'djtraders:product_renew' product.product_id %}"
+                          class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn dt-btn-primary-supplier w3-hover-shadow" title="Renew this product">
+                            <i class="fa-solid fa-arrows-rotate me-1"></i> Renew
+                        </button>
+                    </form>
                 {% endif %}
             {% endif %}
             <div class="dt-link-wrap btn dt-btn-secondary-supplier w3-hover-shadow">
