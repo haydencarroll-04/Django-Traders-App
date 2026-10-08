@@ -624,6 +624,13 @@ td form + form {
   margin-left: 0;
 }
 
+/* The Quantity box on each cart row (_order_line_row.html): wide enough for
+   a 4-5 digit number plus the browser's spinner arrows, narrow enough to
+   leave room for the Update button beside it. */
+.dt-cart-quantity {
+  width: 6rem;
+}
+
 /* A width cap for a centered block of body text (e.g. the djtraders
    home.html intro paragraph). */
 .dt-lead-narrow {

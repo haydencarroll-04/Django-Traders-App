@@ -34,8 +34,9 @@
     clean_<field>() methods (djtraders/forms.py) already doing the
     real work -- see its own comment below.
 
-    AddOrderLineItem (order_build.html) is this project's one
-    AJAX-driven workflow -- see its own comment below.
+    AddOrderLineItem and UpdateCartQuantities (order_build.html) make up
+    this project's one AJAX-driven workflow, the shopping cart -- see
+    their own comments below.
 */
 
 // #region DataTables activation functions
@@ -299,6 +300,90 @@ function AddOrderLineItem(formId) {
             // when there's no JSON to read (a network failure or 500).
             const messages = xhr.responseJSON ? messagesFrom(xhr.responseJSON.errors) : [];
             showError(messages.join(" ") || "Something went wrong adding that to your cart -- try again.");
+        });
+    });
+}
+
+
+/*
+    UpdateCartQuantities -- lets the shopper change a cart line's quantity
+    right in its row of order_build.html. Every row has a small <form>
+    (_order_line_row.html) holding a Quantity box and an Update button;
+    this intercepts that form's submit and POSTs it to order_update_line
+    (djtraders/views.py) via AJAX, then swaps in the refreshed row and the
+    new Order Total -- no page reload, so anything already typed into the
+    Add to Cart or Place Order cards (Ship To, dates) is left alone.
+
+    The listener is attached once, to the table body, and picks up a
+    submit from any row inside it ("event delegation"). A listener on each
+    row would be lost every time a row is replaced -- which happens on
+    every update here and on every add in AddOrderLineItem -- so rows
+    added or refreshed after the page loaded still work with no re-wiring.
+
+    As with AddOrderLineItem, the real check (a whole number, at least 1,
+    no more than the stock on hand) is server-side, in
+    OrderLineQuantityForm; the min=/max= on the box are courtesy only.
+
+    tableBodyId: the <tbody> holding the rows ("#order-lines-body").
+    errorBoxId: the red alert above the table ("#order-lines-error").
+    Both are passed in from order_build.html's {% block scripts %}.
+*/
+function UpdateCartQuantities(tableBodyId, errorBoxId) {
+    const $body = $(tableBodyId);
+    const $errorBox = $(errorBoxId);
+
+    // Scoped to the table body so the Add to Cart form's own quantity box
+    // (also named "quantity") is never touched.
+    function showError(message, $input) {
+        $body.find("input[name='quantity']").removeClass("is-invalid");
+        $input.addClass("is-invalid");
+        $errorBox.text(message).removeClass("d-none");
+    }
+
+    function clearError() {
+        $body.find("input[name='quantity']").removeClass("is-invalid");
+        $errorBox.text("").addClass("d-none");
+    }
+
+    // Same normalizing as AddOrderLineItem: errors arrive either as plain
+    // strings (order_update_line's own access/state checks, views.py) or
+    // as {message, code} objects (Django's form.errors.get_json_data()).
+    function messagesFrom(errors) {
+        return Object.values(errors || {})
+            .flat()
+            .map((error) => (typeof error === "string" ? error : error.message));
+    }
+
+    $body.on("submit", ".order-line-quantity-form", function (event) {
+        event.preventDefault();
+        const $form = $(this);
+        const $input = $form.find("input[name='quantity']");
+        const $button = $form.find("button[type='submit']");
+        clearError();
+        $button.prop("disabled", true);
+
+        $.ajax({
+            url: $form.attr("action"),
+            method: "POST",
+            data: $form.serialize(),
+            dataType: "json",
+        }).done(function (response) {
+            if (!response.success) {
+                showError(messagesFrom(response.errors).join(" ") || "Couldn't update that quantity.", $input);
+                return;
+            }
+            // The whole row is replaced, not just the number, so the
+            // discount, Volume badge, and line total all stay in step.
+            $form.closest("tr").replaceWith(response.row_html);
+            $("#order-total").text("$" + response.order_total);
+        }).fail(function (xhr) {
+            // A refused update (order_update_line's 400/403 JsonResponse)
+            // lands here, not in .done() -- read the real message from
+            // xhr.responseJSON, same as AddOrderLineItem does.
+            const messages = xhr.responseJSON ? messagesFrom(xhr.responseJSON.errors) : [];
+            showError(messages.join(" ") || "Something went wrong updating that quantity -- try again.", $input);
+        }).always(function () {
+            $button.prop("disabled", false);
         });
     });
 }

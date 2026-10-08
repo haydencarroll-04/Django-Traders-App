@@ -13,6 +13,11 @@
     AJAX-driven workflow: the Add to Cart form below is intercepted by
     AddOrderLineItem (DjangoTraders.js), which POSTs to order_add_line and
     patches the table and running total in place, with no page reload.
+    Changing a line's quantity works the same way: each row's Quantity box
+    is intercepted by UpdateCartQuantities (DjangoTraders.js), which POSTs
+    to order_update_line and swaps in the refreshed row and Order Total.
+    A problem (more than the stock on hand, below 1) shows in the red box
+    above the table instead of reloading the page.
 
     The Place Order card's Ship To section is a real, validated form
     (OrderCommitForm's ship_* fields, djtraders/forms.py). It starts out
@@ -56,6 +61,7 @@
                         </button>
                     </form>
                 </div>
+                <div id="order-lines-error" class="alert alert-danger mx-3 mt-3 mb-0 d-none" role="alert"></div>
                 <table id="order-lines-table" class="table mb-0">
                     <thead>
                         <tr>
@@ -214,6 +220,7 @@
     <script>
         $(function() {
             AddOrderLineItem('#order-detail-form');
+            UpdateCartQuantities('#order-lines-body', '#order-lines-error');
             SetUpProductFilter();
         });
     </script>

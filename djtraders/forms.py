@@ -469,6 +469,54 @@ class OrderDetailForm(forms.ModelForm):
         return cleaned_data
 
 
+class OrderLineQuantityForm(forms.Form):
+    """
+    Sets the quantity of a line that is already in the cart
+    (order_update_line, djtraders/views.py). A plain Form, not a
+    ModelForm like OrderDetailForm: the cart is only session state until
+    commit, so there is no OrderDetail row to bind to, and the product is
+    fixed by the URL -- quantity is the only thing asked for.
+
+    The new quantity REPLACES the old one (OrderDetailForm, by contrast,
+    adds to what is already there), so it is checked against the stock on
+    its own, not added to what's in the cart.
+
+    Validation layers, same pattern as OrderDetailForm:
+      - Browser: min=/max= on the Quantity <input> in _order_line_row.html
+        (courtesy).
+      - Server: the quantity field's min_value and clean_quantity() (the
+        real check) -- at least 1, and no more than units_in_stock.
+      - Database: none. order_details.quantity has no CHECK constraint, so
+        only this form (and the stock re-check at commit) stops a cart
+        line from asking for more than is on hand.
+    """
+    quantity = forms.IntegerField(
+        min_value=1,
+        label="Quantity",
+        error_messages={
+            "required": "Enter a quantity.",
+            "invalid": "Quantity must be a whole number.",
+            "min_value": "Quantity must be at least 1.",
+        },
+    )
+
+    def __init__(self, *args, product, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.product = product
+
+    def clean_quantity(self):
+        """
+        Server layer of the stock rule. units_in_stock can be NULL; that's
+        treated as 0, since stock that isn't recorded can't be sold (same
+        as OrderDetailForm.clean()).
+        """
+        quantity = self.cleaned_data["quantity"]
+        available = self.product.units_in_stock or 0
+        if quantity > available:
+            raise ValidationError(f"Only {available} of {self.product.product_name} in stock.")
+        return quantity
+
+
 class OrderCommitForm(forms.ModelForm):
     """
     Sets an order's employee/required_date/shipped_date at commit time

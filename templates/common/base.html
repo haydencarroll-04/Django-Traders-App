@@ -54,8 +54,14 @@
     different options (like disabling sort on an icon column).
   11. A favicon link points at the existing logo-mark.svg -- without it,
     browsers request /favicon.ico automatically and log a 404.
+  12. DjangoTraders.css and DjangoTraders.js are linked through the
+    versioned_static tag (djtraders/templatetags/asset_tags.py), which
+    adds the file's last-modified time to its URL. Without that, a
+    browser can keep running a saved copy of an old script for hours
+    after the file changes, so a newer page (e.g. the cart's Update
+    button) ends up paired with a script that doesn't know about it.
 -->
-{% load static %}
+{% load static asset_tags %}
 <!DOCTYPE html>
 <html lang="en">
       <head>
@@ -81,7 +87,7 @@
             <link href="https://cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css"
                   rel="stylesheet">
             {# This project's own CSS, loaded last so it can override anything above. #}
-            <link href="{% static 'common/css/DjangoTraders.css' %}" rel="stylesheet">
+            <link href="{% versioned_static 'common/css/DjangoTraders.css' %}" rel="stylesheet">
       </head>
 
       <body>
@@ -190,7 +196,7 @@
             <script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
             {# This project's own JS, loaded last so it can rely on jQuery/DataTables #}
             {# above -- includes the DataTables activation functions themselves now. #}
-            <script src="{% static 'common/js/DjangoTraders.js' %}"></script>
+            <script src="{% versioned_static 'common/js/DjangoTraders.js' %}"></script>
             {# A child template calls whichever DataTables activation function its #}
             {# own table needs here -- after DjangoTraders.js, so that function #}
             {# already exists, e.g. customer_list.html's MakeCustomersDataTable(). #}

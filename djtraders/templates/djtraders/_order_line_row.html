@@ -9,11 +9,35 @@
     AddOrderLineItem looks for, to replace an existing row in place
     instead of appending a duplicate one when a product already on the
     order gets more added to it.
+
+    The Quantity cell is a small form of its own -- a number box and an
+    Update button. DjangoTraders.js's UpdateCartQuantities intercepts its
+    submit, POSTs to order_update_line (djtraders/views.py), and swaps this
+    whole row for the one that comes back, so the quantity, discount, and
+    line total always agree. The box's min=/max= (1, and the product's
+    units_in_stock) are a courtesy only; OrderLineQuantityForm
+    (djtraders/forms.py) is the real check. If that script isn't running
+    (JavaScript blocked, or an old saved copy of the file), the form still
+    works as an ordinary POST: order_update_line saves the quantity and
+    redirects back to the cart, showing any problem as a message at the top.
 -->
 <tr data-product-id="{{ line.product.product_id }}">
     <td>{{ line.product.product_name }}</td>
     <td class="text-end">${{ line.unit_price|floatformat:2 }}</td>
-    <td class="text-end">{{ line.quantity }}</td>
+    <td class="text-end">
+        <form method="post"
+              action="{% url 'djtraders:order_update_line' customer_id line.product.product_id %}"
+              class="order-line-quantity-form d-inline-flex align-items-center justify-content-end gap-1">
+            {% csrf_token %}
+            <input type="number" name="quantity" value="{{ line.quantity }}"
+                   min="1" max="{{ line.product.units_in_stock|default_if_none:0 }}" required
+                   class="form-control form-control-sm text-end dt-cart-quantity"
+                   aria-label="Quantity of {{ line.product.product_name }}">
+            <button type="submit" class="btn btn-sm dt-btn-primary-customer w3-hover-shadow" title="Update quantity">
+                <i class="fa-solid fa-check"></i>
+            </button>
+        </form>
+    </td>
     <td class="text-end">
         {{ line.discount_percent|floatformat:"-2" }}%
         {% if line.is_volume_discount %}<span class="badge text-bg-success ms-1" title="Automatic discount for ordering more than 10 units">Volume</span>{% endif %}

@@ -17,8 +17,9 @@ the Module 2 features on top:
   Customer" with a generated 5-letter ID, and a soft delete that sets
   `inactive_date`.
 - **Employee detail page** — landing page after an employee logs in.
-- **Ordering** — a session-backed shopping cart with AJAX "Add to Cart",
-  committed as one `Order` plus its `OrderDetail` rows in a single
+- **Ordering** — a session-backed shopping cart with AJAX "Add to Cart"
+  and editable line quantities, committed as one `Order` plus its
+  `OrderDetail` rows in a single
   transaction. Same-day orders can be cancelled.
 - **Order detail** — Shipping Info card, Supplier column, and product names
   linking to the Module 1 Product Detail page.

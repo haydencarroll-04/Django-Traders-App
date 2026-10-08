@@ -159,6 +159,13 @@ order_delete_url = path(
     "orders/<int:order_id>/delete/", views.order_delete, name="order_delete"
 )
 
+# POST /djtraders/customers/<customer_id>/orders/update-line/<product_id>/ -> views.order_update_line (AJAX)
+order_update_line_url = path(
+    "customers/<str:customer_id>/orders/update-line/<int:product_id>/",
+    views.order_update_line,
+    name="order_update_line",
+)
+
 # POST /djtraders/customers/<customer_id>/orders/remove-line/<product_id>/ -> views.order_remove_line
 order_remove_line_url = path(
     "customers/<str:customer_id>/orders/remove-line/<int:product_id>/",
@@ -206,6 +213,7 @@ urlpatterns = [
     product_edit_url,
     product_delete_url,
     product_renew_url,
+    order_update_line_url,
     order_remove_line_url,
     order_clear_cart_url,
 ]

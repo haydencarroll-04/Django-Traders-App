@@ -29,8 +29,9 @@ Ordering: a customer's in-progress order lives in
 request.session["cart"] (a plain dict, no database row) until
 order_commit writes it out as a real Order plus its OrderDetail rows,
 inside one transaction. order_create/order_build/order_add_line/
-order_commit walk through that flow; order_delete cancels an
-already-placed order on the same day it was placed.
+order_update_line/order_remove_line/order_clear_cart/order_commit walk
+through that flow; order_delete cancels an already-placed order on the
+same day it was placed.
 """
 
 from types import SimpleNamespace
@@ -42,7 +43,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .forms import CustomerEditForm, CustomerSignupForm, OrderCommitForm, OrderDetailForm, ProductEditForm, default_required_date, default_shipped_date
+from .forms import CustomerEditForm, CustomerSignupForm, OrderCommitForm, OrderDetailForm, OrderLineQuantityForm, ProductEditForm, default_required_date, default_shipped_date
 from .models import Category, Customer, Employee, Order, OrderDetail, Product, Supplier
 
 
@@ -105,7 +106,7 @@ def _cart_access_denied(request, customer_id):
     -- neither an employee (who can start and build a cart on behalf of any
     customer) nor that customer's own logged-in session. Same shape as
     _customer_edit_denied below; used by every cart view (order_create/
-    build/add_line/remove_line/clear_cart/commit).
+    build/add_line/update_line/remove_line/clear_cart/commit).
 
     The cart itself is still just request.session["cart"], tagged with the
     customer_id it belongs to -- only who is allowed to touch it changed.
@@ -949,9 +950,9 @@ def order_add_line(request, customer_id):
     render -- this is the one genuinely AJAX-driven workflow in the app,
     so the page itself never reloads while lines are being added.
 
-    Deliberately does not check quantity against the product's own
-    units_in_stock -- adding more than what's technically in stock is
-    not refused here.
+    The stock rule (what's already in the cart plus this quantity can't
+    exceed units_in_stock) is enforced by OrderDetailForm.clean(), so
+    an over-stock add comes back as an ordinary field error here.
     """
     if _cart_access_denied(request, customer_id):
         return JsonResponse({"success": False, "errors": {"__all__": ["Not allowed."]}}, status=403)
@@ -1006,6 +1007,100 @@ def order_add_line(request, customer_id):
             "order_total": f"{cart_total:,.2f}",
         }
     )
+
+
+def order_update_line(request, customer_id, product_id):
+    """
+    AJAX endpoint (the Quantity box on each row of order_build.html,
+    DjangoTraders.js's UpdateCartQuantities) -- sets one cart line's
+    quantity to exactly the number typed, where order_add_line would add
+    that number on top of what's already there. Returns JSON in the same
+    shape as order_add_line (row_html, product_id, order_total), so the
+    page can swap in the refreshed row and the new total without a reload.
+
+    Only quantity is ever read from the POST. The line's discount is not
+    touched, so this can't be used to get one (a customer can't) and an
+    employee's discount survives the change; _cart_lines re-prices the line
+    from its new quantity, so crossing the volume-discount threshold in
+    either direction (more than 10 units) adds or drops that automatic 10%
+    on its own. The rules for the number itself (at least 1, no more than
+    the stock on hand) are OrderLineQuantityForm's.
+
+    Only a product that is already in the cart can be updated -- this never
+    creates a line (that's order_add_line), and a quantity below 1 is
+    refused rather than treated as a removal (that's order_remove_line).
+    POST-only, same self-service access check as the other cart views.
+
+    JSON is only the answer to an AJAX call (jQuery marks every one with
+    an X-Requested-With header). If the row's form is submitted the
+    ordinary way instead -- JavaScript blocked, or the page is running an
+    old saved copy of DjangoTraders.js that has no UpdateCartQuantities
+    yet -- the same checks run, but the answer is a redirect back to the
+    cart, with any problem shown as a red message at the top of the page.
+    Either way nobody is left looking at a page of raw JSON.
+    """
+    wants_json = request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+    def refuse(errors, status):
+        # errors is {field: [str or {"message": ..., "code": ...}]} -- the
+        # shape the JSON branch sends as-is. A plain form submit gets each
+        # message as a red banner (base.html) on the redirected cart page.
+        if wants_json:
+            return JsonResponse({"success": False, "errors": errors}, status=status)
+        for field_errors in errors.values():
+            for error in field_errors:
+                messages.error(request, error if isinstance(error, str) else error["message"])
+        return redirect("djtraders:order_build", customer_id=customer_id)
+
+    if _cart_access_denied(request, customer_id):
+        if wants_json:
+            return JsonResponse({"success": False, "errors": {"__all__": ["Not allowed."]}}, status=403)
+        return redirect("djtraders:customer_detail", customer_id=customer_id)
+
+    if request.method != "POST":
+        return refuse({"__all__": ["Not allowed."]}, 405)
+
+    cart = request.session.get("cart")
+    if not cart or cart.get("customer_id") != customer_id:
+        return refuse({"__all__": ["Your cart isn't open anymore -- reload the page."]}, 400)
+
+    product_key = str(product_id)
+    product = Product.objects.filter(pk=product_id).first()
+    if product is None or product_key not in cart["lines"]:
+        return refuse({"__all__": ["That item isn't in your cart anymore -- reload the page."]}, 400)
+
+    form = OrderLineQuantityForm(request.POST, product=product)
+    if not form.is_valid():
+        # Same get_json_data() shape order_add_line returns -- see the
+        # comment there for why it isn't the bare form.errors.
+        return refuse(form.errors.get_json_data(), 400)
+
+    cart["lines"][product_key] = form.cleaned_data["quantity"]
+    # Mutating the nested dict in place isn't noticed by the session
+    # middleware on its own -- same reason order_add_line sets this.
+    request.session.modified = True
+
+    if not wants_json:
+        return redirect("djtraders:order_build", customer_id=customer_id)
+
+    cart_lines = _cart_lines(cart)
+    line = next(line for line in cart_lines if line.product.product_id == product_id)
+    row_html = render_to_string(
+        "djtraders/_order_line_row.html",
+        {"line": line, "customer_id": customer_id},
+        request=request,
+    )
+
+    cart_total = sum(line.line_total for line in cart_lines)
+    return JsonResponse(
+        {
+            "success": True,
+            "row_html": row_html,
+            "product_id": product_id,
+            "order_total": f"{cart_total:,.2f}",
+        }
+    )
+
 
 def order_remove_line(request, customer_id, product_id):
     """
