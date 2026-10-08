@@ -3,16 +3,13 @@ Django Forms for the djtraders app.
 
 A Form (or ModelForm, below) is Django's own way of describing an HTML
 form's fields, validation, and rendering as a Python class, instead of
-hand-written <input> tags. customer_edit_form.html (the "plain" edit
-page) skips this entirely -- it reads request.POST fields directly and
-writes them onto the Customer instance itself. CustomerEditForm below
-is the same edit, built the ModelForm way instead, rendered by
+hand-written <input> tags and hand-written checks in the view.
+CustomerEditForm below edits a Customer the ModelForm way, rendered by
 customer_edit.html through django-crispy-forms' {% crispy %} tag (see
-settings.py's INSTALLED_APPS/CRISPY_* settings). Both pages render the
-identical field grid on purpose, so the real difference stands out:
-CustomerEditForm declares its fields and layout once as a class, and
-gets validation Django builds in for free (a required field, a max
-length) without any hand-written checks in the view.
+settings.py's INSTALLED_APPS/CRISPY_* settings): it declares its fields
+and layout once as a class, and gets validation Django builds in for
+free (a required field, a max length) without any hand-written checks
+in the view.
 
 CustomerEditForm's fields also carry a running example of Django's
 three validation layers, each one enforcing the same rule a different
@@ -125,10 +122,9 @@ class CustomerEditForm(forms.ModelForm):
         # {% block scripts %} can target it by id (ValidateCustomerEditForm,
         # DjangoTraders.js) -- crispy renders no id at all by default.
         self.helper.form_id = "customer-edit-form"
-        # Same grid as customer_edit_form.html's hand-written <div class="row g-3">
-        # -- Row/Column are crispy's own layout objects, each Column's
-        # css_class the same Bootstrap col-md-* used there. The trailing
-        # HTML(...) is the Save button itself (see this class's docstring).
+        # The field grid -- Row/Column are crispy's own layout objects, each
+        # Column's css_class a Bootstrap col-md-*. The trailing HTML(...) is
+        # the Save button itself (see this class's docstring).
         self.helper.layout = Layout(
             Row(
                 Column("company_name", css_class="col-md-6"),

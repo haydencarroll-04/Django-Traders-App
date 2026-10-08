@@ -12,10 +12,10 @@ the Module 2 features on top:
   who is logged in, and the project home page offers "start a new session".
 - **Self-service access** — a logged-in customer only sees their own record;
   employees can view and act on any customer.
-- **Customer edit / create / deactivate** — the same edit built two ways
-  (a hand-written form and a crispy-forms `ModelForm` with browser, server,
-  and jQuery validation), employee-only "New Customer" with a generated
-  5-letter ID, and a soft delete that sets `inactive_date`.
+- **Customer edit / create / deactivate** — a crispy-forms `ModelForm` edit
+  page with browser, server, and jQuery validation, employee-only "New
+  Customer" with a generated 5-letter ID, and a soft delete that sets
+  `inactive_date`.
 - **Employee detail page** — landing page after an employee logs in.
 - **Ordering** — a session-backed shopping cart with AJAX "Add to Cart",
   committed as one `Order` plus its `OrderDetail` rows in a single

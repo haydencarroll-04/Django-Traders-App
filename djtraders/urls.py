@@ -105,11 +105,6 @@ customer_logout_url = path(
     "customer-logout/", views.customer_logout_view, name="customer_logout"
 )
 
-# GET/POST /djtraders/customers/<customer_id>/edit-form/ -> views.customer_edit_form
-customer_edit_form_url = path(
-    "customers/<str:customer_id>/edit-form/", views.customer_edit_form, name="customer_edit_form"
-)
-
 # GET/POST /djtraders/customers/<customer_id>/edit/ -> views.customer_edit
 customer_edit_url = path(
     "customers/<str:customer_id>/edit/",
@@ -193,7 +188,6 @@ urlpatterns = [
     customer_login_url,
     customer_signup_url,
     customer_logout_url,
-    customer_edit_form_url,
     customer_edit_url,
     employee_detail_url,
     customer_delete_url,

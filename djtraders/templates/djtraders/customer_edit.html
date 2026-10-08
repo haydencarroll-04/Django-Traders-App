@@ -7,9 +7,7 @@
     case). "form" is a CustomerEditForm instance (djtraders/forms.py)
     bound to "customer" -- the crispy tag below renders every one of
     its fields, including the Save/Cancel buttons, as Bootstrap 5
-    markup from the field list and layout that class declares. Compare
-    to customer_edit_form.html, which hand-writes the same fields as
-    plain <input> tags instead.
+    markup from the field list and layout that class declares.
 
     When customer_list.html's Delete icon links here with
     ?confirm_delete=1, the card body shows an in-page "are you sure?"
@@ -40,7 +38,7 @@
                         New Customer
                     {% else %}
                         <i class="fa-solid fa-pen-to-square dt-icon"></i>
-                        Edit {{ customer.company_name }} (crispy form)
+                        Edit {{ customer.company_name }}
                     {% endif %}
                 </div>
                 <div class="card-body">

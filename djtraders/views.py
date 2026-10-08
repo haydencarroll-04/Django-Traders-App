@@ -19,13 +19,11 @@ the top of this file (_own_customer_redirect, _own_employee_redirect,
 _customer_edit_denied, _order_access_denied) enforce that rule wherever
 it applies, instead of repeating the same session checks in every view.
 
-Customer edit/create: customer_edit_form and customer_edit render the
-identical fields two ways -- hand-written <input> tags vs. a Django
-ModelForm (CustomerEditForm, djtraders/forms.py) rendered through
-django-crispy-forms -- to compare the two approaches side by side.
-customer_create reuses customer_edit's own template and form for a
-Customer that doesn't exist yet. customer_delete marks a customer
-inactive instead of deleting the row.
+Customer edit/create: customer_edit is a Django ModelForm
+(CustomerEditForm, djtraders/forms.py) rendered through
+django-crispy-forms. customer_create reuses customer_edit's own
+template and form for a Customer that doesn't exist yet.
+customer_delete marks a customer inactive instead of deleting the row.
 
 Ordering: a customer's in-progress order lives in
 request.session["cart"] (a plain dict, no database row) until
@@ -121,11 +119,11 @@ def _customer_edit_denied(request, customer_id):
     """
     True if the current session may NOT edit this customer_id -- neither
     an employee (who can edit any customer) nor this customer's own
-    logged-in session. Used by customer_edit_form/customer_edit to gate
-    the whole view; unlike _own_customer_redirect above, an anonymous
-    visitor (or a different customer) is denied outright here rather
-    than redirected to their own page, since there's no "own edit page"
-    to send them to instead.
+    logged-in session. Used by customer_edit to gate the whole view;
+    unlike _own_customer_redirect above, an anonymous visitor (or a
+    different customer) is denied outright here rather than redirected
+    to their own page, since there's no "own edit page" to send them to
+    instead.
     """
     logged_in_employee = request.session.get("current_user")
     logged_in_customer_id = request.session.get("customer_id")
@@ -382,72 +380,20 @@ def customer_detail(request, customer_id):
     return render(request, "djtraders/customer_detail.html", context)
 
 
-def customer_edit_form(request, customer_id):
-    """
-    Edit a customer's own record by hand-reading each request.POST field
-    onto the Customer instance -- no Django Form class involved, the
-    same low-level approach as every other form in this project
-    (login_view, customer_login_view). Every Customer field is editable
-    except customer_id (the URL's own path parameter, never editable)
-    and inactive_date (admin-only, left out of this page on purpose).
-
-    Available to an employee editing any customer, or a logged-in
-    customer editing their own record only (_customer_edit_denied,
-    above) -- same restriction as customer_edit below.
-
-    Compare to customer_edit below: same fields, same rule, but built
-    with a Django ModelForm (djtraders/forms.py) instead.
-    """
-    customer = get_object_or_404(Customer, pk=customer_id)
-
-    if _customer_edit_denied(request, customer_id):
-        return redirect("djtraders:customer_detail", customer_id=customer_id)
-
-    error = None
-    if request.method == "POST":
-        # company_name is the one field this model requires (NOT NULL,
-        # no blank=True in djtraders/models.py) -- checked by hand here,
-        # since nothing else validates it before customer.save() would
-        # hit the database's own NOT NULL constraint instead.
-        company_name = request.POST.get("company_name", "").strip()
-        if not company_name:
-            error = "Company Name is required."
-        else:
-            customer.company_name = company_name
-            customer.contact_name = request.POST.get("contact_name", "")
-            customer.contact_title = request.POST.get("contact_title", "")
-            customer.address = request.POST.get("address", "")
-            customer.city = request.POST.get("city", "")
-            customer.region = request.POST.get("region", "")
-            customer.postal_code = request.POST.get("postal_code", "")
-            customer.country = request.POST.get("country", "")
-            customer.phone = request.POST.get("phone", "")
-            customer.fax = request.POST.get("fax", "")
-            customer.password = request.POST.get("password", "")
-            customer.save()
-            return redirect("djtraders:customer_detail", customer_id=customer.customer_id)
-
-    context = {"customer": customer, "error": error}
-    return render(request, "djtraders/customer_edit_form.html", context)
-
-
 def customer_edit(request, customer_id):
     """
-    Same edit as customer_edit_form above, built the Django Form way
-    instead: CustomerEditForm (djtraders/forms.py) declares the fields/
-    widgets once as a class, request.POST is bound to it and checked
-    with form.is_valid() instead of hand-validating each field, and
+    Edit a customer's record with a Django ModelForm: CustomerEditForm
+    (djtraders/forms.py) declares the fields/widgets once as a class,
+    request.POST is bound to it and checked with form.is_valid(), and
     form.save() writes every validated field onto the Customer instance
     at once -- no manual field-by-field assignment. company_name being
-    required is enforced automatically here (a ModelForm reads that off
-    the model field itself), not by an explicit check like
-    customer_edit_form above has to do.
+    required is enforced automatically (a ModelForm reads that off the
+    model field itself).
 
     customer_edit.html renders the form with django-crispy-forms'
-    {% crispy %} tag instead of hand-written <input> tags -- same fields
-    and access rule as customer_edit_form (_customer_edit_denied,
-    above), different rendering approach, to compare the two side by
-    side.
+    {% crispy %} tag. Available to an employee editing any customer, or a
+    logged-in customer editing their own record only
+    (_customer_edit_denied, above).
     """
     customer = get_object_or_404(Customer, pk=customer_id)
 
