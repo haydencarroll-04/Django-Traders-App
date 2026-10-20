@@ -10,21 +10,24 @@
     instead of appending a duplicate one when a product already on the
     order gets more added to it.
 
-    The Quantity cell is a small form of its own -- a number box and an
-    Update button. DjangoTraders.js's UpdateCartQuantities intercepts its
-    submit, POSTs to order_update_line (djtraders/views.py), and swaps this
-    whole row for the one that comes back, so the quantity, discount, and
-    line total always agree. The box's min=/max= (1, and the product's
-    units_in_stock) are a courtesy only; OrderLineQuantityForm
-    (djtraders/forms.py) is the real check. If that script isn't running
-    (JavaScript blocked, or an old saved copy of the file), the form still
-    works as an ordinary POST: order_update_line saves the quantity and
-    redirects back to the cart, showing any problem as a message at the top.
+    customer_id is passed in alongside line by both render paths above,
+    just for the Remove button's URL below.
+
+    Enhancement 3: line.discount_percent is line.discount (the 0.0-1.0
+    fraction OrderDetail.discount itself stores) already multiplied by
+    100 for display -- see _cart_lines, djtraders/views.py.
 -->
 <tr data-product-id="{{ line.product.product_id }}">
     <td>{{ line.product.product_name }}</td>
     <td class="text-end">${{ line.unit_price|floatformat:2 }}</td>
     <td class="text-end">
+        <!-- The Quantity cell is a small form of its own -- a number box and an
+             Update button. DjangoTraders.js's UpdateCartQuantities intercepts its
+             submit, POSTs to order_update_line (djtraders/views.py), and swaps
+             this whole row for the one that comes back, so the quantity, discount
+             and line total always agree. min=/max= are a courtesy only;
+             OrderLineQuantityForm (djtraders/forms.py) is the real check. Without
+             JavaScript the form still works as an ordinary POST. -->
         <form method="post"
               action="{% url 'djtraders:order_update_line' customer_id line.product.product_id %}"
               class="order-line-quantity-form d-inline-flex align-items-center justify-content-end gap-1">
@@ -44,12 +47,15 @@
     </td>
     <td class="text-end">${{ line.line_total|floatformat:2 }}</td>
     <td class="text-center">
-        <form method="post"
-              action="{% url 'djtraders:order_remove_line' customer_id line.product.product_id %}"
-              class="d-inline">
+        <!-- #region [WHY] Enhancement 1: no confirm step on Remove -->
+        <!-- A plain POST removes this line entirely, same single-click
+             convention as order_detail.html's Cancel Order button -- see
+             views.py's order_remove_line for why no confirm step is needed. -->
+        <!-- #endregion -->
+        <form method="post" action="{% url 'djtraders:order_remove_line' customer_id line.product.product_id %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-link p-0" title="Remove from cart">
-                <i class="fa-solid fa-trash fa-lg dt-icon-danger"></i>
+            <button type="submit" class="btn btn-sm dt-btn-secondary-customer w3-hover-shadow" title="Remove from cart">
+                <i class="fa-solid fa-trash dt-icon-danger"></i>
             </button>
         </form>
     </td>

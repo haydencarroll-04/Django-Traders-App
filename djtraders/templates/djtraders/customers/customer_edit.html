@@ -9,19 +9,18 @@
     its fields, including the Save/Cancel buttons, as Bootstrap 5
     markup from the field list and layout that class declares.
 
-    When customer_list.html's Delete icon (or this page's own Delete
-    button, below) links here with ?confirm_delete=1, the card body shows
-    an in-page "are you sure?" prompt instead of the form. Its Confirm
-    button posts to customer_delete (djtraders/views.py) rather than
-    popping a browser confirm() dialog. Cancel on that prompt goes back to
-    the customer's detail page rather than reopening this edit form.
-
     Employees also get an "Employee actions" bar at the bottom of the
     card: Delete for an active customer, or Reactivate (a real POST to
     customer_reactivate) for an inactive one. Neither the bar nor the
     ?confirm_delete=1 prompt is ever shown to a customer editing their own
-    record, or on the New Customer page. Both actions send the employee
-    back to the Customers list, same as from the list's own icons.
+    record, or on the New Customer page.
+
+    When customer_list.html's Delete icon links here with
+    ?confirm_delete=1, the card body shows an in-page "are you sure?"
+    prompt instead of the form. Its Confirm button posts to
+    customer_delete (djtraders/views.py) rather than popping a browser
+    confirm() dialog. Cancel on that prompt goes back to the customer's
+    detail page rather than reopening this edit form.
 
     A hand-written jQuery validation call (ValidateCustomerEditForm,
     DjangoTraders.js, wired up in the scripts block below) illustrates
@@ -39,7 +38,7 @@
     <div class="row justify-content-center">
         <div class="col-md-7">
             <div class="card mt-4 border-0 shadow-sm">
-                <div class="card-header fw-bolder h4">
+                <div class="card-header fw-bolder h5">
                     {% if new_customer %}
                         <i class="fa-solid fa-user-plus dt-icon"></i>
                         New Customer

@@ -4,7 +4,7 @@ __pycache__/
 *.egg-info/
 
 # Virtual environment (machine-specific, not needed to see the code)
-.venv/
+.venv*/
 venv/
 
 # Django

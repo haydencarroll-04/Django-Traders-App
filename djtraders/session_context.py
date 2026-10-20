@@ -20,10 +20,10 @@ base.html's navbar can show who's logged in without every view having
 to look it up and pass it in its own context by hand. current_customer
 is the same idea for the customer-facing login, reading "customer_id"
 (set by views.customer_login_view). Only one of the two is ever set at
-a time, since login_view/customer_login_view each clear both keys on
+a time, since login_view/customer_login_view/supplier_login_view each clear all three keys on
 landing (djtraders/views.py).
 """
-from .models import Customer, Employee
+from .models import Customer, Employee, Supplier
 
 
 def current_employee(request):
@@ -49,3 +49,15 @@ def current_customer(request):
     customer_id = request.session.get("customer_id")
     customer = Customer.objects.filter(pk=customer_id).first() if customer_id else None
     return {"current_customer": customer}
+
+
+def current_supplier(request):
+    """
+    Looks up the Supplier matching request.session["supplier_id"], if
+    any supplier is currently logged in. Returns {"current_supplier": None}
+    when nobody is, same shape as current_customer above, for the
+    supplier-facing side.
+    """
+    supplier_id = request.session.get("supplier_id")
+    supplier = Supplier.objects.filter(pk=supplier_id).first() if supplier_id else None
+    return {"current_supplier": supplier}

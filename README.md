@@ -1,10 +1,11 @@
-# Django Traders App — Module 2
+# The Marketplace at Carroll Trading Company — Module 3
 
 A Django application for ISM 672 (Application Design and Programming), built
 against the classic Northwind-style "DjangoTraders" PostgreSQL database.
 
-This branch is **Module 2**. It keeps every Module 1 customization and layers
-the Module 2 features on top:
+This is **Module 3**: the instructor's M3 code base (supplier portal, employee
+and customer dashboards, autocomplete cart) merged with my Module 2 additions
+(see `MERGE_NOTES.md`). Module 2 features carried forward:
 
 - **Logins** — separate employee login (pick a name; PIN is the birth year)
   and customer login (pick a company; password from the `customers` table),
@@ -48,9 +49,8 @@ the Module 2 features on top:
    pip install -r requirements.txt
    ```
 
-   Module 2 adds `django-crispy-forms` and `crispy-bootstrap5` to
-   `requirements.txt`, so re-run `pip install` if you are upgrading an
-   existing Module 1 environment.
+   Module 3 adds `pandas` and `plotly` (dashboard charts) to
+   `requirements.txt`, so re-run `pip install` if upgrading from Module 2.
 
 2. Provide your local database credentials. Copy the example file and edit it:
 

@@ -3,13 +3,12 @@ Django Forms for the djtraders app.
 
 A Form (or ModelForm, below) is Django's own way of describing an HTML
 form's fields, validation, and rendering as a Python class, instead of
-hand-written <input> tags and hand-written checks in the view.
-CustomerEditForm below edits a Customer the ModelForm way, rendered by
-customer_edit.html through django-crispy-forms' {% crispy %} tag (see
-settings.py's INSTALLED_APPS/CRISPY_* settings): it declares its fields
-and layout once as a class, and gets validation Django builds in for
-free (a required field, a max length) without any hand-written checks
-in the view.
+hand-written <input> tags. CustomerEditForm below is the customer edit
+page's form, rendered by customer_edit.html through django-crispy-forms'
+{% crispy %} tag (see settings.py's INSTALLED_APPS/CRISPY_* settings).
+It declares its fields and layout once as a class, and gets validation
+Django builds in for free (a required field, a max length) without any
+hand-written checks in the view.
 
 CustomerEditForm's fields also carry a running example of Django's
 three validation layers, each one enforcing the same rule a different
@@ -35,13 +34,13 @@ four small, independent examples of this pattern -- useful as a
 template for writing a new business rule elsewhere in the app.
 """
 import re
+from datetime import timedelta
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Column, Layout, Row
 from django import forms
 from django.core.exceptions import ValidationError
-
-from datetime import date, timedelta
+from django.utils import timezone
 
 from .models import Category, Customer, Order, OrderDetail, Product, Supplier
 
@@ -59,13 +58,6 @@ PHONE_PATTERN = r"[0-9()\-\s]{7,20}"
 # way PHONE_PATTERN is, between the browser-layer widget attribute and
 # the server-layer clean_<field>() checks.
 NO_DIGITS_PATTERN = r"[^0-9]*"
-
-# Letters, digits, spaces, and hyphens only, 3-10 characters -- loose enough
-# for "27402", "02389-673", "H1J 1C3", or "WA1 1DP", tight enough to reject
-# obvious garbage. Shared the same way PHONE_PATTERN is: by the widget's
-# pattern= attribute (browser layer) and OrderCommitForm.clean_ship_postal_code()
-# (server layer), so the two can never quietly drift apart.
-POSTAL_CODE_PATTERN = r"[A-Za-z0-9 \-]{3,10}"
 
 
 class CustomerEditForm(forms.ModelForm):
@@ -86,17 +78,15 @@ class CustomerEditForm(forms.ModelForm):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Browser layer of the phone validation example: a real HTML5
-        # pattern= on the rendered <input>, using the exact same
-        # PHONE_PATTERN clean_phone() checks server-side below, so the
-        # two can't silently drift apart. title= is what most browsers
-        # show in their own "please match this format" tooltip.
+        # Browser layer for phone (see module docstring): pattern=
+        # matches PHONE_PATTERN so it can't drift from clean_phone()
+        # below. title= is the tooltip browsers show on a mismatch.
         self.fields["phone"].widget.attrs.update({
             "pattern": PHONE_PATTERN,
             "title": "Digits, spaces, parentheses, and dashes only (7-20 characters).",
         })
-        # Browser layer of the no-digits examples. Unlike phone, there's
-        # no database constraint backing either of these rules up.
+        # Same idea for the no-digits examples -- except neither has a
+        # database constraint backing it up.
         self.fields["company_name"].widget.attrs.update({
             "pattern": NO_DIGITS_PATTERN,
             "title": "No numbers in a company name.",
@@ -105,26 +95,20 @@ class CustomerEditForm(forms.ModelForm):
             "pattern": NO_DIGITS_PATTERN,
             "title": "No numbers in a city name.",
         })
-        # Contact Name can't be blank. The model itself allows it
-        # (contact_name has blank=True, null=True, models.py), so this
-        # override is the entire fix, on both layers at once: setting
-        # required=True makes Django render a real HTML5 required
-        # attribute (browser layer) AND raises "This field is
-        # required." during the form's own field-level validation
-        # (server layer) -- which runs before any clean_<field>()
-        # method, so no separate clean_contact_name() is needed. As
-        # with the no-digits fields above, there's no database layer
-        # behind this rule -- blank=True/null=True mean Postgres has no
-        # opinion either way; only the form enforces it.
+        # Contact Name can't be blank; the model allows it (blank=True,
+        # null=True), so required=True here is the entire fix -- it
+        # covers both the browser (HTML5 required attr) and server
+        # (field-level validation, before clean_<field>() runs) layers
+        # at once, with no database layer behind it either.
         self.fields["contact_name"].required = True
         self.helper = FormHelper()
         # A real id= on the rendered <form>, so customer_edit.html's own
         # {% block scripts %} can target it by id (ValidateCustomerEditForm,
         # DjangoTraders.js) -- crispy renders no id at all by default.
         self.helper.form_id = "customer-edit-form"
-        # The field grid -- Row/Column are crispy's own layout objects, each
-        # Column's css_class a Bootstrap col-md-*. The trailing HTML(...) is
-        # the Save button itself (see this class's docstring).
+        # The field grid -- Row/Column are crispy's own layout objects,
+        # each Column's css_class a Bootstrap col-md-* width. The trailing
+        # HTML(...) is the Save button itself (see this class's docstring).
         self.helper.layout = Layout(
             Row(
                 Column("company_name", css_class="col-md-6"),
@@ -217,11 +201,9 @@ class CustomerEditForm(forms.ModelForm):
     def clean_company_name(self):
         """
         Server layer of the first no-digits example. company_name is
-        required (the model's own NOT NULL already guarantees non-blank
-        by the time this runs -- Django calls a field's required check
-        before clean_<field_name>(), so an actually-blank submission
-        never reaches this method), so no blank check is needed here,
-        only the digits rule.
+        required, and Django's own required check runs before
+        clean_<field_name>(), so no blank check is needed here -- only
+        the digits rule.
         """
         name = self.cleaned_data.get("company_name", "")
         if not re.fullmatch(NO_DIGITS_PATTERN, name):
@@ -239,6 +221,268 @@ class CustomerEditForm(forms.ModelForm):
         if city and not re.fullmatch(NO_DIGITS_PATTERN, city):
             raise ValidationError("City can't contain numbers.")
         return city
+
+
+class OrderDetailForm(forms.ModelForm):
+    """
+    Adds one line item (product + quantity + discount) to a draft Order.
+
+    product/quantity/discount_percent are the only fields ever collected
+    from the user; unit_price (a required, non-null column on
+    OrderDetail -- djtraders/models.py) is set by the view from the
+    chosen product's own current unit_price, not asked for here.
+
+    discount_percent is a plain, non-model field (not in Meta.fields
+    below) rather than a direct ModelForm field over OrderDetail's own
+    discount column, because the two use different units: a customer
+    enters a percentage ("10" meaning 10%), while OrderDetail.discount
+    stores that same rate as a fraction (0.10) -- see its own line_total
+    property. clean_discount_percent below is the one place that
+    percent-to-fraction conversion has to be remembered at all; the view
+    (order_add_line, djtraders/views.py) divides by 100 once validation
+    passes and never touches the raw percentage again.
+
+    Enhancement 3. Up to 10% is accepted with no further check -- a
+    normal, self-service discount. Anything higher needs a manager's
+    say-so, which this project expresses the same way Enhancement 7
+    already relaxes the cart's own access rule: only a cart an employee
+    is driving (employee_initiated=True, passed in by the view from
+    request.session["current_user"]) may go as high as 100%; a plain
+    customer cart is capped at 10% no matter what's typed in.
+
+    Enhancement 5. clean() below checks quantity against the selected
+    product's own units_in_stock -- a cross-field rule, unlike
+    CustomerEditForm's clean_phone()/clean_company_name()/clean_city()
+    above, since it needs product and quantity together rather than
+    either field alone. This is only the first of two stock checks:
+    a courtesy check here, at add-to-cart time, plus the real,
+    authoritative re-check order_commit (djtraders/views.py) makes
+    against each product's *current* units_in_stock right before
+    writing the order -- stock available when a line was added isn't
+    guaranteed to still be available by the time the cart is committed.
+
+    Enhancement 2. category_id (order_build's own "category" GET
+    parameter) narrows the Product dropdown to one category at a time,
+    the same filter Product.search already offers on product_list.html
+    -- optional, since order_build's other callers (order_commit's own
+    error-path re-render) construct this form with no category chosen.
+    """
+    discount_percent = forms.FloatField(
+        required=False, initial=0, label="Discount %"
+    )
+
+    def __init__(self, *args, category_id=None, employee_initiated=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Enhancement 3: clean_discount_percent below reads this same
+        # flag to pick the 10%/100% ceiling.
+        self.employee_initiated = employee_initiated
+
+        # Only non-discontinued products are offered -- same reasoning
+        # as Product.search's own show_all=False default (models.py).
+        products = self.fields["product"].queryset.filter(discontinued=0)
+        if category_id:
+            products = products.filter(category_id=category_id)
+        self.fields["product"].queryset = products
+        # The product is chosen through order_build.html's autocomplete
+        # text box (product_search_json), which writes the chosen
+        # product's pk into this field -- so it renders as a hidden
+        # <input id="id_product">, not a dropdown. The queryset above is
+        # still the server-side gate: a pk that doesn't exist, or belongs
+        # to a discontinued product, fails ModelChoiceField validation
+        # no matter what the browser sent.
+        self.fields["product"].widget = forms.HiddenInput()
+        self.fields["product"].error_messages["invalid_choice"] = (
+            "Pick a product from the suggestions -- that one isn't available."
+        )
+        # Browser layer (courtesy): a real HTML5 min= on the rendered
+        # <input>, blocking an obviously-bad quantity (zero or negative)
+        # before a request is even sent. Not a guarantee -- same caveat
+        # as every other pattern= attribute in this file.
+        self.fields["quantity"].widget.attrs.update({"min": 1, "class": "form-control"})
+        # Starts at 1 -- the same value the card shows again after every
+        # successful add (order_add_line renders a fresh card).
+        self.fields["quantity"].initial = 1
+        # Same browser-layer courtesy for discount_percent -- max=
+        # matches whichever ceiling clean_discount_percent below will
+        # actually enforce, so an employee's cart shows a wider allowed
+        # range than a plain customer cart, right on the input itself.
+        self.fields["discount_percent"].widget.attrs.update({
+            "min": 0,
+            "max": 100 if employee_initiated else 10,
+            "step": "0.01",
+            "class": "form-control",
+        })
+
+    class Meta:
+        model = OrderDetail
+        fields = ["product", "quantity"]
+
+    def clean_quantity(self):
+        """
+        Server layer: quantity has to be a positive number.
+        """
+        quantity = self.cleaned_data.get("quantity")
+        if quantity is not None and quantity < 1:
+            raise ValidationError("Quantity must be at least 1.")
+        return quantity
+
+    def clean_discount_percent(self):
+        """
+        Server layer for Enhancement 3's discount ceiling (see this
+        class's own docstring). A blank field defaults to 0 -- discount
+        is optional, same as it was before this form collected one at
+        all.
+        """
+        discount_percent = self.cleaned_data.get("discount_percent")
+        if discount_percent is None:
+            return 0.0
+        if discount_percent < 0:
+            raise ValidationError("Discount can't be negative.")
+        ceiling = 100 if self.employee_initiated else 10
+        if discount_percent > ceiling:
+            raise ValidationError(
+                f"Discount can't exceed {ceiling:g}% -- ask an employee to "
+                f"place this order for a higher discount."
+            )
+        return discount_percent
+
+    def clean(self):
+        """
+        Enhancement 5, courtesy check (see this class's own docstring):
+        quantity can't exceed the selected product's own units_in_stock.
+        A cross-field rule, so it belongs in clean() rather than a
+        single-field clean_<field>() -- same reasoning as
+        OrderCommitForm.clean() below.
+
+        Only runs once product and quantity have each already passed
+        their own field-level checks (a missing product, or a quantity
+        clean_quantity above already rejected, cleaned_data simply won't
+        have that key). units_in_stock can be None on some products
+        (an ordinary nullable column, models.py) -- treated as "no
+        stock limit to check" rather than "zero in stock."
+        """
+        cleaned_data = super().clean()
+        product = cleaned_data.get("product")
+        quantity = cleaned_data.get("quantity")
+        stock_known = product is not None and product.units_in_stock is not None
+        if stock_known and quantity is not None and quantity > product.units_in_stock:
+            self.add_error(
+                "quantity",
+                f"Only {product.units_in_stock} of {product.product_name} left in stock.",
+            )
+        return cleaned_data
+
+
+class OrderCommitForm(forms.ModelForm):
+    """
+    Sets an order's employee/required_date/shipped_date at commit time
+    -- the one point where a cart becomes a real, placed Order.
+    order_date itself is set by the view (order_commit, djtraders/
+    views.py), not by this form -- it's always today, on commit, not a
+    value anyone picks.
+
+    employee is a real, required field on this form even though the
+    model column itself is nullable (Order.employee, models.py,
+    SET_NULL) -- required here is a business rule ("every placed order
+    needs an employee of record"), not a database constraint, the same
+    "form is stricter than the column" shape as everywhere else in this
+    file. __init__ below overrides the ModelForm default (a nullable
+    model field would otherwise make this field optional on its own)
+    and gives it a label_from_instance, the same reason OrderDetailForm's
+    product field needs one -- Employee (models.py) has no __str__ of
+    its own, so without this override each option would render as
+    Django's default "Employee object (5)".
+
+    required_date/shipped_date both come with a sensible default (two
+    weeks out / one week out from today) computed in the view and
+    passed in as this form's initial= values, but both stay real,
+    editable fields -- a business-convention starting guess, not a
+    fixed rule.
+
+    Enhancement 6. ship_name/ship_address/ship_city/ship_region/
+    ship_postal_code/ship_country (Order's own columns, models.py) are
+    real, editable fields here too, instead of order_commit copying the
+    customer's on-file address onto them unconditionally -- the view
+    passes that same on-file address in as this form's initial= values
+    (same "sensible starting guess, stays editable" shape as
+    required_date/shipped_date above), so a customer sees their usual
+    address prefilled but can ship somewhere else for this one order.
+    ship_name/ship_address/ship_city/ship_country are required as a
+    business rule (a real shipment needs at least those); ship_region/
+    ship_postal_code stay optional, the same as Customer's own
+    region/postal_code fields (not every address uses them).
+
+    Used unbound (no instance=) -- order_commit (djtraders/views.py)
+    calls form.save(commit=False) to build a brand-new Order. A
+    ModelForm behaves as a create form or an update form purely based
+    on whether instance= was passed at construction, not on anything
+    declared here.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["employee"].required = True
+        self.fields["employee"].empty_label = "Select an employee..."
+        self.fields["employee"].queryset = self.fields["employee"].queryset.order_by(
+            "last_name", "first_name"
+        )
+        self.fields["employee"].label_from_instance = (
+            lambda employee: f"{employee.first_name} {employee.last_name}"
+        )
+        self.fields["employee"].widget.attrs.update({"class": "form-select"})
+
+        # Enhancement 6: required as a business rule, same "form is
+        # stricter than the column" shape as employee above -- every
+        # one of these columns is nullable on Order itself (models.py).
+        for field_name in ("ship_name", "ship_address", "ship_city", "ship_country"):
+            self.fields[field_name].required = True
+        for field_name in (
+            "ship_name", "ship_address", "ship_city",
+            "ship_region", "ship_postal_code", "ship_country",
+        ):
+            self.fields[field_name].widget.attrs.update({"class": "form-control"})
+
+    class Meta:
+        model = Order
+        fields = [
+            "employee",
+            "required_date",
+            "shipped_date",
+            "ship_name",
+            "ship_address",
+            "ship_city",
+            "ship_region",
+            "ship_postal_code",
+            "ship_country",
+        ]
+        widgets = {
+            "required_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "shipped_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        }
+
+    def clean(self):
+        """
+        Same "no database backstop" shape as every other business rule
+        in this file: nothing stops Postgres from storing a required/
+        shipped date before the order was even placed -- these two
+        checks are the only thing that would catch it.
+        """
+        cleaned_data = super().clean()
+        today = timezone.now().date()
+        for field_name, label in (("required_date", "Required date"), ("shipped_date", "Ship-by date")):
+            value = cleaned_data.get(field_name)
+            if value is not None and value < today:
+                self.add_error(field_name, f"{label} can't be before today's order date.")
+        return cleaned_data
+
+
+def default_required_date():
+    """order_date (today, at commit) + 2 weeks -- see OrderCommitForm."""
+    return timezone.now().date() + timedelta(weeks=2)
+
+
+def default_shipped_date():
+    """order_date (today, at commit) + 1 week -- see OrderCommitForm."""
+    return timezone.now().date() + timedelta(weeks=1)
 
 
 class CustomerSignupForm(CustomerEditForm):
@@ -354,121 +598,6 @@ class CustomerSignupForm(CustomerEditForm):
         return cleaned_data
 
 
-MAX_FREE_DISCOUNT_PERCENT = 10
-class OrderDetailForm(forms.ModelForm):
-    """
-    Adds one line item (product + quantity) to a draft Order.
-
-    Only product/quantity are ever collected from the user; unit_price
-    and discount (both required, non-null columns on OrderDetail --
-    djtraders/models.py) are set by the view from the chosen product's
-    own unit_price and a flat 0.0 discount, not asked for here.
-    """
-    # Not model fields. OrderDetail.discount is stored as a fraction (0.10 =
-    # 10%), so the user types a percent and the view divides by 100. Blank
-    # means "leave this product's existing discount alone". Both fields are
-    # only shown to employees (order_build.html).
-    discount_percent = forms.FloatField(
-        required=False, min_value=0, max_value=100, label="Discount (%)"
-    )
-    manager_approved = forms.BooleanField(required=False, label="Manager approved")
-
-    def __init__(self, *args, in_cart=None, is_employee=False, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.is_employee = is_employee
-        self.fields["discount_percent"].widget.attrs.update({
-            "class": "form-control", "step": "0.01", "min": 0, "max": 100, "placeholder": "0",
-        })
-        self.fields["manager_approved"].widget.attrs.update({"class": "form-check-input"})
-        # {str(product_id): quantity} already in the session cart, so the
-        # stock check in clean() counts what's already there.
-        self.in_cart = in_cart or {}
-        # Only non-discontinued products are offered -- same reasoning
-        # as Product.search's own show_all=False default (models.py).
-        self.fields["product"].queryset = self.fields["product"].queryset.filter(
-            discontinued=0
-        )
-        self.fields["product"].empty_label = "Select a product..."
-        self.fields["product"].widget.attrs.update({"class": "form-select"})
-        # Product (models.py) has no __str__ of its own, so a plain
-        # ModelChoiceField would render each <option> as the default
-        # "Product object (5)" -- label_from_instance overrides that
-        # per-choice display text (not the value actually submitted,
-        # which is still just the product's pk) with something a
-        # student picking from this dropdown can actually read.
-        self.fields["product"].label_from_instance = (
-            lambda product: f"{product.product_name} (${product.unit_price or 0:.2f})"
-        )
-        # Browser layer (courtesy): a real HTML5 min= on the rendered
-        # <input>, blocking an obviously-bad quantity (zero or negative)
-        # before a request is even sent. Not a guarantee -- same caveat
-        # as every other pattern= attribute in this file.
-        self.fields["quantity"].widget.attrs.update({"min": 1, "class": "form-control"})
-
-    class Meta:
-        model = OrderDetail
-        fields = ["product", "quantity"]
-
-    def clean_quantity(self):
-        """
-        Server layer: quantity has to be a positive number.
-        """
-        quantity = self.cleaned_data.get("quantity")
-        if quantity is not None and quantity < 1:
-            raise ValidationError("Quantity must be at least 1.")
-        return quantity
-
-
-    def clean_discount_percent(self):
-        """
-        Server layer, rule 1: only employees can apply a discount at all.
-        The template hides the field from customers, but a POST that adds it
-        by hand lands here and is refused.
-        """
-        percent = self.cleaned_data.get("discount_percent")
-        if percent and not self.is_employee:
-            raise ValidationError("Only an employee can apply a discount.")
-        return percent
-
-    def clean(self):
-        """
-        Server layer of the stock rule (the real check). Needs product and
-        quantity together, so it's a cross-field clean() rather than a
-        clean_<field>() -- the same shape OrderCommitForm.clean() uses.
-        Counts what's already in the cart, since adding the same product
-        again bumps the existing line. units_in_stock can be NULL; that's
-        treated as 0, since stock that isn't recorded can't be sold.
-        There's no database backstop: nothing stops order_details.quantity
-        from exceeding products.units_in_stock.
-        """
-        cleaned_data = super().clean()
-        product = cleaned_data.get("product")
-        quantity = cleaned_data.get("quantity")
-        if product is not None and quantity is not None:
-            available = product.units_in_stock or 0
-            already = self.in_cart.get(str(product.product_id), 0)
-            if already + quantity > available:
-                message = f"Only {available} of {product.product_name} in stock"
-                if already:
-                    message += f" ({already} already in your cart)"
-                self.add_error("quantity", message + ".")
-        # Server layer, rule 2: staff discounts above the free ceiling also
-        # need manager approval. Cross-field (discount + approval together),
-        # so it lives in clean() rather than a clean_<field>().
-        percent = cleaned_data.get("discount_percent")
-        if (
-            percent
-            and percent > MAX_FREE_DISCOUNT_PERCENT
-            and not cleaned_data.get("manager_approved")
-        ):
-            self.add_error(
-                "discount_percent",
-                f"Discounts above {MAX_FREE_DISCOUNT_PERCENT}% need manager approval -- "
-                'tick "Manager approved".',
-            )
-        return cleaned_data
-
-
 class OrderLineQuantityForm(forms.Form):
     """
     Sets the quantity of a line that is already in the cart
@@ -517,166 +646,6 @@ class OrderLineQuantityForm(forms.Form):
         return quantity
 
 
-class OrderCommitForm(forms.ModelForm):
-    """
-    Sets an order's employee/required_date/shipped_date at commit time
-    -- the one point where a cart becomes a real, placed Order.
-    order_date itself is set by the view (order_commit, djtraders/
-    views.py), not by this form -- it's always today, on commit, not a
-    value anyone picks.
-
-    employee is a real, required field on this form even though the
-    model column itself is nullable (Order.employee, models.py,
-    SET_NULL) -- required here is a business rule ("every placed order
-    needs an employee of record"), not a database constraint, the same
-    "form is stricter than the column" shape as everywhere else in this
-    file. __init__ below overrides the ModelForm default (a nullable
-    model field would otherwise make this field optional on its own)
-    and gives it a label_from_instance, the same reason OrderDetailForm's
-    product field needs one -- Employee (models.py) has no __str__ of
-    its own, so without this override each option would render as
-    Django's default "Employee object (5)".
-
-    required_date/shipped_date both come with a sensible default (two
-    weeks out / one week out from today) computed in the view and
-    passed in as this form's initial= values, but both stay real,
-    editable fields -- a business-convention starting guess, not a
-    fixed rule.
-
-    Used unbound (no instance=) -- order_commit (djtraders/views.py)
-    calls form.save(commit=False) to build a brand-new Order. A
-    ModelForm behaves as a create form or an update form purely based
-    on whether instance= was passed at construction, not on anything
-    declared here.
-
-    The six ship_* fields are the order's ship-to address, which the
-    customer can change at commit time. order_build (djtraders/views.py)
-    pre-fills them from the customer's own on-file address, so leaving them
-    alone ships to the same place as before; order_commit then saves
-    whatever was submitted onto the Order, not the customer's address.
-    Validation has the usual three layers: browser (the required/pattern
-    attributes set in __init__), server (the clean_ship_*() methods below),
-    and the database (only the column lengths, which max_length mirrors).
-    Name, address, city, and country are required; region and postal code
-    stay optional, since many customers on file have no region and not
-    every country uses either one.
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["employee"].required = True
-        self.fields["employee"].empty_label = "Select an employee..."
-        self.fields["employee"].queryset = self.fields["employee"].queryset.order_by(
-            "last_name", "first_name"
-        )
-        self.fields["employee"].label_from_instance = (
-            lambda employee: f"{employee.first_name} {employee.last_name}"
-        )
-        self.fields["employee"].widget.attrs.update({"class": "form-select"})
-
-        # Ship-to address. Required: an order has to go somewhere. The model
-        # columns are all nullable (blank=True), so "required" is a form rule --
-        # the same "form is stricter than the column" shape as employee above.
-        # Region and postal code stay optional.
-        for name in ("ship_name", "ship_address", "ship_city", "ship_region",
-                     "ship_postal_code", "ship_country"):
-            self.fields[name].widget.attrs.update({"class": "form-control"})
-        for name in ("ship_name", "ship_address", "ship_city", "ship_country"):
-            self.fields[name].required = True
-        # Browser layer (courtesy only): the same patterns the clean_ship_*()
-        # methods below re-check on the server.
-        for name, label in (("ship_city", "city"), ("ship_region", "region"),
-                            ("ship_country", "country")):
-            self.fields[name].widget.attrs.update({
-                "pattern": NO_DIGITS_PATTERN,
-                "title": f"No numbers in a {label} name.",
-            })
-        self.fields["ship_postal_code"].widget.attrs.update({
-            "pattern": POSTAL_CODE_PATTERN,
-            "title": "Letters, numbers, spaces, and hyphens only (3-10 characters).",
-        })
-
-    class Meta:
-        model = Order
-        fields = [
-            "employee", "required_date", "shipped_date",
-            "ship_name", "ship_address", "ship_city", "ship_region",
-            "ship_postal_code", "ship_country",
-        ]
-        labels = {
-            "ship_name": "Name",
-            "ship_address": "Address",
-            "ship_city": "City",
-            "ship_region": "Region",
-            "ship_postal_code": "Postal Code",
-            "ship_country": "Country",
-        }
-        widgets = {
-            "required_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-            "shipped_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-        }
-
-    def _check_no_digits(self, field_name, label):
-        """
-        Shared by the three place-name checks below -- the same rule
-        CustomerEditForm.clean_city() enforces. Blank is fine (region is
-        optional, and the required ones are already refused before this runs).
-        """
-        value = self.cleaned_data.get(field_name, "")
-        if value and not re.fullmatch(NO_DIGITS_PATTERN, value):
-            raise ValidationError(f"{label} can't contain numbers.")
-        return value
-
-    def clean_ship_city(self):
-        """Server layer of the no-digits rule for the ship-to city."""
-        return self._check_no_digits("ship_city", "City")
-
-    def clean_ship_region(self):
-        """Server layer of the no-digits rule for the ship-to region."""
-        return self._check_no_digits("ship_region", "Region")
-
-    def clean_ship_country(self):
-        """Server layer of the no-digits rule for the ship-to country."""
-        return self._check_no_digits("ship_country", "Country")
-
-    def clean_ship_postal_code(self):
-        """
-        Server layer of the postal-code format rule. Optional: a blank code
-        skips the check entirely, the same way CustomerEditForm.clean_phone()
-        treats a blank phone. A non-blank code has to match POSTAL_CODE_PATTERN,
-        whether or not the browser's own pattern= check ran.
-        """
-        code = self.cleaned_data.get("ship_postal_code", "")
-        if code and not re.fullmatch(POSTAL_CODE_PATTERN, code):
-            raise ValidationError(
-                "Enter a valid postal code (letters, numbers, spaces, and hyphens only, "
-                "3-10 characters)."
-            )
-        return code
-
-    def clean(self):
-        """
-        Same "no database backstop" shape as every other business rule
-        in this file: nothing stops Postgres from storing a required/
-        shipped date before the order was even placed -- these two
-        checks are the only thing that would catch it.
-        """
-        cleaned_data = super().clean()
-        today = date.today()
-        for field_name, label in (("required_date", "Required date"), ("shipped_date", "Ship-by date")):
-            value = cleaned_data.get(field_name)
-            if value is not None and value < today:
-                self.add_error(field_name, f"{label} can't be before today's order date.")
-        return cleaned_data
-
-
-def default_required_date():
-    """order_date (today, at commit) + 2 weeks -- see OrderCommitForm."""
-    return date.today() + timedelta(weeks=2)
-
-
-def default_shipped_date():
-    """order_date (today, at commit) + 1 week -- see OrderCommitForm."""
-    return date.today() + timedelta(weeks=1)
 class ProductEditForm(forms.ModelForm):
     """
     Create/edit form for a Product, built the same way as CustomerEditForm.

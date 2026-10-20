@@ -119,6 +119,8 @@ TEMPLATES = [
                 # current_customer (djtraders/session_context.py) to every
                 # template's context.
                 'djtraders.session_context.current_customer',
+                # And for the supplier login -- adds current_supplier.
+                'djtraders.session_context.current_supplier',
             ],
         },
     },
@@ -174,17 +176,14 @@ STATIC_URL = 'static/'
 
 # region [CONCEPT] STATICFILES_DIRS vs. per-app static/ folders
 # STATICFILES_DIRS lists static folders that live outside any single
-# app -- the same idea as TEMPLATES['DIRS'] above, but for static files
-# instead of templates. Without this, Django's staticfiles app only
-# finds each installed app's own static/ folder (e.g. an app's
-# static/<app_name>/ -- there's no such folder in this project
-# currently, since djtraders/static/djtraders/css/site.css was removed
-# once the app converted to Bootstrap). This entry adds the project-root
-# static/ folder, which is where static/common/DjangoTraders.css and
-# static/common/DjangoTraders.js live -- project-wide assets that
-# aren't tied to any one app, referenced from templates/common/base.html.
+# app -- same idea as TEMPLATES['DIRS'] above, but for static files.
+# Without this, Django's staticfiles app only finds each installed
+# app's own static/ folder. This entry adds the project-root static/
+# folder, where static/common/DjangoTraders.css/.js live -- project-wide
+# assets referenced from templates/common/base.html.
 # endregion
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
