@@ -39,13 +39,13 @@
                                       action="{% url 'djtraders:product_delete' product.product_id %}">
                                     {% csrf_token %}
                                     <button type="submit"
-                                            class="btn btn-outline-danger bg-white text-black w3-hover-shadow"
+                                            class="btn btn-outline-danger bg-white text-black dt-hover-shadow"
                                             title="Confirm discontinue">
                                         <i class="fa-solid fa-ban me-1"></i>
                                         Yes, Discontinue
                                     </button>
                                 </form>
-                                <div class="dt-link-wrap btn dt-btn-secondary-supplier w3-hover-shadow">
+                                <div class="dt-link-wrap btn dt-btn-secondary-supplier dt-hover-shadow">
                                     <a href="{% url 'djtraders:product_detail' product.product_id %}" title="Cancel">
                                         <i class="fa-solid fa-xmark me-1"></i>
                                         Cancel
