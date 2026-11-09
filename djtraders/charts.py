@@ -1,7 +1,7 @@
 """
 Chart helpers: they turn order lines into pandas DataFrames and DataFrames into
 Plotly chart HTML, so the customer, employee and supplier pages all draw their
-charts the same way. A model method (for example Customer.annual_orders_plot)
+charts the same way. A model method (for example Customer.annual_revenue_plot)
 pulls its order lines out of the database with lines_frame, groups them with
 pandas, and hands the result to bar_figure or line_figure.
 
@@ -24,14 +24,19 @@ from plotly.colors import qualitative
 CHART_COLORS = qualitative.Set3
 
 
-def lines_frame(lines):
+def lines_frame(lines, extra=None):
     """
     Turns a queryset of OrderDetail rows into a DataFrame, one row per line, with
     the columns the charts group on: order_id, order_date, year, month,
     product_name, category_name, customer_name, quantity and revenue (empty when
     there are no lines). .values() asks the database for just those columns as
     plain dicts instead of building a model object per row.
+
+    extra adds columns a particular chart needs, as {column name: field path}, for
+    example {"discontinued": "product__discontinued"}. Only ask for what the viewer
+    may see: every column asked for is in the frame the chart is built from.
     """
+    extra = extra or {}
     rows = lines.values(
         "order_id",
         "order__order_date",
@@ -41,10 +46,12 @@ def lines_frame(lines):
         "unit_price",
         "quantity",
         "discount",
+        *extra.values(),
     )
     frame = pd.DataFrame(list(rows))
     if frame.empty:
         return frame
+    frame = frame.rename(columns={path: name for name, path in extra.items()})
     frame = frame.rename(columns={
         "order__order_date": "order_date",
         "order__customer__company_name": "customer_name",
@@ -180,18 +187,19 @@ def top_with_other(data, category, value, count):
     return top
 
 
-def pie_figure(data, category, value, title, color_names=None, height=420):
+def pie_figure(data, category, value, title, color_names=None, height=420, money=True):
     """
     Builds one pie chart with Plotly Express: a slice per row of data, colored like
     the bar charts (a name keeps its color; "Other" is gray) and labeled with its
-    percent. The hover box shows the name, its dollars and its percent, so value
-    should be a dollar amount. Use top_with_other first so there are few slices.
+    percent. The hover box shows the name, its value and its percent: dollars by
+    default, or a plain count with money=False (units). Use top_with_other first so
+    there are few slices.
     """
     colors = _color_map(data[category] if color_names is None else color_names)
     colors["Other"] = "lightgray"
     figure = px.pie(data, names=category, values=value, title=title, height=height,
                     color=category, color_discrete_map=colors)
     figure.update_traces(sort=False, textinfo="percent",
-                         hovertemplate="<b>%{label}</b><br>$%{value:,.0f} (%{percent})<extra></extra>")
+                         hovertemplate="<b>%{label}</b><br>" + ("$" if money else "") + "%{value:,.0f} (%{percent})<extra></extra>")
     return figure_html(figure)
 

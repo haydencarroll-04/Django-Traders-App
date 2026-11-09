@@ -190,6 +190,17 @@ customer_monthly_chart_url = path(
     "customers/<str:customer_id>/monthly-chart/",
     customers.customer_monthly_chart, name="customer_monthly_chart",
 )
+# GET /djtraders/customers/<id>/category-charts/?year=&kind= and /top-products-chart/?year=&top=
+# -> customers.customer_category_charts, customer_top_products_chart (HTML fragments the
+# dashboard's category and top-product controls load)
+customer_category_charts_url = path(
+    "customers/<str:customer_id>/category-charts/",
+    customers.customer_category_charts, name="customer_category_charts",
+)
+customer_top_products_chart_url = path(
+    "customers/<str:customer_id>/top-products-chart/",
+    customers.customer_top_products_chart, name="customer_top_products_chart",
+)
 customer_info_url = path(
     "customers/<str:customer_id>/info/",
     customers.customer_info, name="customer_info",
@@ -199,9 +210,9 @@ customer_orders_url = path(
     customers.customer_orders, name="customer_orders",
 )
 
-# Supplier portal: login/logout, then the supplier page and its three AJAX tabs
+# Supplier portal: login/logout, then the supplier page and its four AJAX tabs
 # (suppliers.supplier_login_view / supplier_logout_view / supplier_detail /
-# supplier_info / supplier_orders / supplier_products)
+# supplier_dashboard / supplier_info / supplier_orders / supplier_products)
 supplier_login_url = path("supplier-login/", suppliers.supplier_login_view, name="supplier_login")
 supplier_logout_url = path("supplier-logout/", suppliers.supplier_logout_view, name="supplier_logout")
 supplier_detail_url = path(
@@ -215,6 +226,30 @@ supplier_orders_url = path(
 )
 supplier_products_url = path(
     "suppliers/<int:supplier_id>/products/", suppliers.supplier_products, name="supplier_products"
+)
+
+# GET /djtraders/suppliers/<id>/monthly-chart/, /category-charts/, /top-products-chart/,
+# /comparison-chart/, /country-chart/ -> suppliers.supplier_monthly_chart,
+# supplier_category_charts, supplier_top_products_chart, supplier_comparison_chart,
+# supplier_country_chart (HTML fragments that the Dashboard tab's controls load by AJAX,
+# each one chart's HTML)
+supplier_dashboard_url = path(
+    "suppliers/<int:supplier_id>/dashboard/", suppliers.supplier_dashboard, name="supplier_dashboard"
+)
+supplier_monthly_chart_url = path(
+    "suppliers/<int:supplier_id>/monthly-chart/", suppliers.supplier_monthly_chart, name="supplier_monthly_chart"
+)
+supplier_category_charts_url = path(
+    "suppliers/<int:supplier_id>/category-charts/", suppliers.supplier_category_charts, name="supplier_category_charts"
+)
+supplier_top_products_chart_url = path(
+    "suppliers/<int:supplier_id>/top-products-chart/", suppliers.supplier_top_products_chart, name="supplier_top_products_chart"
+)
+supplier_comparison_chart_url = path(
+    "suppliers/<int:supplier_id>/comparison-chart/", suppliers.supplier_comparison_chart, name="supplier_comparison_chart"
+)
+supplier_country_chart_url = path(
+    "suppliers/<int:supplier_id>/country-chart/", suppliers.supplier_country_chart, name="supplier_country_chart"
 )
 
 # --- Carroll Trading Company additions (from M2) ---
@@ -301,6 +336,8 @@ urlpatterns = [
     order_delete_url,
     customer_dashboard_url,
     customer_monthly_chart_url,
+    customer_category_charts_url,
+    customer_top_products_chart_url,
     customer_info_url,
     customer_orders_url,
     supplier_login_url,
@@ -309,6 +346,12 @@ urlpatterns = [
     supplier_info_url,
     supplier_orders_url,
     supplier_products_url,
+    supplier_dashboard_url,
+    supplier_monthly_chart_url,
+    supplier_category_charts_url,
+    supplier_top_products_chart_url,
+    supplier_comparison_chart_url,
+    supplier_country_chart_url,
     product_create_url,
     product_edit_url,
     product_delete_url,

@@ -44,7 +44,173 @@ class Category(models.Model):
         db_table = 'categories'
 
 
-class Customer(models.Model):
+# region [CONCEPT] charts the customer and supplier dashboards share
+# Both dashboards ask the same questions of a different slice of the order lines (a
+# customer's own orders, or a supplier's own products): summary cards, revenue by year
+# and month, revenue by category, unit share by category and top products. Those live
+# here once. A model that mixes this class in provides _order_lines_frame(extra) (its
+# slice of the lines, see lines_frame in charts.py) and order_years(), and everything
+# below works on that frame, so a chart can never include lines outside the slice.
+# endregion
+class DashboardChartsMixin:
+    """Dashboard cards and charts built from self._order_lines_frame(); mixed into Customer and Supplier."""
+
+    def parse_year(self, raw):
+        """A ?year= value as an int that is one of this model's order years, None for "all" (or blank), or False when it is invalid."""
+        if raw in ("", "all", None):
+            return None
+        try:
+            year = int(raw)
+        except ValueError:
+            return False
+        return year if year in self.order_years() else False
+
+    def _year_frame(self, year=None, extra=None):
+        """This model's lines, narrowed to one year (None keeps every year)."""
+        frame = self._order_lines_frame(extra)
+        if year is not None and not frame.empty:
+            frame = frame[frame["year"] == year]
+        return frame
+
+    def annual_revenue_plot(self):
+        """Bar chart of this model's revenue for each year, with a trend line (a straight line fitted through the yearly totals: it slopes up when revenue is growing from year to year); None when there are no sales."""
+        frame = self._order_lines_frame()
+        if frame.empty:
+            return None
+        annual = frame.groupby("year", as_index=False)["revenue"].sum()
+        annual["year"] = annual["year"].astype(str)
+        return bar_figure(
+            annual, "year", "revenue", "Revenue by year",
+            {"year": "Year", "revenue": "Revenue ($)"},
+        )
+
+    def monthly_revenue_plot(self, year):
+        """
+        Bar chart of this model's revenue for each month of one year (what the
+        dashboards' year dropdown loads), or None when that year has no sales.
+        reindex(range(1, 13), fill_value=0) puts all twelve months on the chart:
+        without it a month with no sales would be missing instead of $0.
+        """
+        frame = self._year_frame(year)
+        if frame.empty:
+            return None
+        monthly = (
+            frame.groupby("month")["revenue"].sum()
+            .reindex(range(1, 13), fill_value=0)
+            .reset_index()
+        )
+        monthly["month"] = [calendar.month_abbr[m] for m in monthly["month"]]
+        return bar_figure(
+            monthly, "month", "revenue", f"Revenue by month, {year}",
+            {"month": "Month", "revenue": "Revenue ($)"},
+        )
+
+    def dashboard_stats(self):
+        """
+        The summary cards, or None when nothing has been sold: total revenue, orders
+        (distinct), units, average order (revenue per order), and the last order (its
+        id, date and revenue on it, within this model's own slice of the lines).
+
+        "Year to date" needs a today, but the order history ends long ago, so the
+        latest order date in the slice stands in for today: ytd_revenue is revenue
+        from Jan 1 of that year to that date, prior_ytd_revenue the same span one
+        year earlier, and change_pct the difference as a percent (None when the
+        year before had no sales, which has no percentage change).
+        """
+        frame = self._order_lines_frame()
+        if frame.empty:
+            return None
+        last_date = frame["order_date"].max()
+        last_order_id = int(frame.loc[frame["order_date"] == last_date, "order_id"].max())
+        last_revenue = float(frame.loc[frame["order_id"] == last_order_id, "revenue"].sum())
+
+        this_year = last_date.year
+        ytd = frame.loc[frame["year"] == this_year, "revenue"].sum()
+        prior_cutoff = last_date - pd.DateOffset(years=1)
+        prior_ytd = frame.loc[(frame["year"] == this_year - 1) & (frame["order_date"] <= prior_cutoff), "revenue"].sum()
+        revenue = float(frame["revenue"].sum())
+        orders = int(frame["order_id"].nunique())
+        return {
+            "revenue": revenue,
+            "orders": orders,
+            "units": int(frame["quantity"].sum()),
+            "average_order": revenue / orders,
+            "last_order_id": last_order_id,
+            "last_order_date": last_date.date(),
+            "last_order_revenue": last_revenue,
+            "ytd_year": this_year,
+            "ytd_revenue": float(ytd),
+            "prior_ytd_revenue": float(prior_ytd),
+            "change_pct": float((ytd - prior_ytd) / prior_ytd * 100) if prior_ytd > 0 else None,
+        }
+
+    def category_revenue_plot(self, year=None):
+        """Horizontal bar chart of revenue by category, largest first, for one year or all of them; None when there are no sales."""
+        frame = self._year_frame(year)
+        if frame.empty:
+            return None
+        by_category = frame.groupby("category_name", as_index=False)["revenue"].sum().sort_values("revenue")
+        scope = f", {year}" if year else ""
+        return bar_figure(
+            by_category, "category_name", "revenue", f"Revenue by category{scope}",
+            {"category_name": "Category", "revenue": "Revenue ($)"},
+            horizontal=True, trend=False, height=max(260, 60 * len(by_category) + 120),
+        )
+
+    def category_units_plot(self, year=None, kind="bar"):
+        """
+        Each category's share of the units sold, for one year or all of them: a
+        bar chart of percents (kind="bar") or a pie (kind="pie"). None when there
+        are no sales.
+        """
+        frame = self._year_frame(year)
+        if frame.empty:
+            return None
+        units = frame.groupby("category_name", as_index=False)["quantity"].sum()
+        scope = f", {year}" if year else ""
+        title = f"Unit share by category{scope}"
+        if kind == "pie":
+            return pie_figure(top_with_other(units, "category_name", "quantity", 8),
+                              "category_name", "quantity", title, money=False)
+        units["percent"] = units["quantity"] / units["quantity"].sum() * 100
+        units = units.sort_values("percent")
+        return bar_figure(
+            units, "category_name", "percent", title,
+            {"category_name": "Category", "percent": "Share of units (%)"},
+            horizontal=True, trend=False, height=max(260, 60 * len(units) + 120),
+            text=[f"{p:.1f}%" for p in units["percent"]],
+            hover=[f"<b>{c}</b><br>{q:,.0f} units ({p:.1f}%)" for c, q, p in zip(units["category_name"], units["quantity"], units["percent"])],
+        )
+
+    # What the top-products chart can rank by: the column of the frame and its label.
+    TOP_MEASURES = {"revenue": "Revenue", "quantity": "Units sold"}
+
+    @staticmethod
+    def _top_products_figure(frame, top, measure):
+        """
+        Horizontal bar chart of the top products in frame by revenue or by units
+        (measure = "revenue" or "quantity"), largest at the top, or None for an empty
+        frame. The title names the top you asked for, and says how many products
+        have sales when that is fewer, so a short chart doesn't look like a stuck control.
+        """
+        if frame.empty:
+            return None
+        by_product = (
+            frame.groupby("product_name", as_index=False)[measure].sum()
+            .sort_values(measure, ascending=False).head(top)
+            .sort_values(measure)
+        )
+        what = "revenue" if measure == "revenue" else "units"
+        shown = len(by_product)
+        note = f" (only {shown} with sales)" if shown < top else ""
+        return bar_figure(
+            by_product, "product_name", measure, f"Top {top} products by {what}{note}",
+            {"product_name": "Product", measure: "Revenue ($)" if measure == "revenue" else "Units sold"},
+            horizontal=True, trend=False, height=max(260, 42 * len(by_product) + 120),
+        )
+
+
+class Customer(DashboardChartsMixin, models.Model):
     """A DjangoTraders customer. No foreign keys, so no on_delete concerns."""
     customer_id = models.CharField(primary_key=True, max_length=5)
     company_name = models.CharField(max_length=40)
@@ -67,11 +233,11 @@ class Customer(models.Model):
         return ", ".join(part for part in parts if part)
 
     # region [WHY] charts built from a DataFrame
-    # Each *_plot method pulls this customer's placed order lines into a DataFrame
-    # (_order_lines_frame), groups and sums them with pandas, and hands the result to
-    # bar_figure, which returns chart HTML a template prints with |safe.
+    # Each *_plot method (most are in DashboardChartsMixin) pulls this customer's placed
+    # order lines into a DataFrame (_order_lines_frame), groups and sums them with pandas,
+    # and hands the result to bar_figure, which returns chart HTML a template prints with |safe.
     # endregion
-    def _order_lines_frame(self):
+    def _order_lines_frame(self, extra=None):
         """
         Every line on this customer's placed orders as a DataFrame (see
         lines_frame in charts.py). An order with no order_date is an unplaced
@@ -79,46 +245,16 @@ class Customer(models.Model):
         """
         return lines_frame(OrderDetail.objects.filter(
             order__customer=self, order__order_date__isnull=False
-        ))
+        ), extra=extra)
+
+    def top_products_plot(self, top=10, measure="revenue", year=None):
+        """Horizontal bar chart of this customer's top products by revenue or units (measure = "revenue" or "quantity"), for one year or all of them; None when they bought nothing."""
+        return self._top_products_figure(self._year_frame(year), top, measure)
 
     def order_years(self):
         """Distinct years this customer has placed orders in, newest first."""
         years = self.order_set.filter(order_date__isnull=False).dates("order_date", "year")
         return sorted((d.year for d in years), reverse=True)
-
-    def annual_orders_plot(self):
-        """Bar chart of this customer's total revenue for each year."""
-        frame = self._order_lines_frame()
-        if frame.empty:
-            return None
-        annual = frame.groupby("year", as_index=False)["revenue"].sum()
-        annual["year"] = annual["year"].astype(str)
-        return bar_figure(
-            annual, "year", "revenue", "Revenue by year",
-            {"year": "Year", "revenue": "Revenue ($)"},
-        )
-
-    def orders_placed_plot(self, year):
-        """
-        Bar chart of this customer's revenue for each month of one year (what the
-        dashboard's year dropdown loads), or None when that year has no placed
-        orders. reindex(range(1, 13), fill_value=0) puts all twelve months on the
-        chart: without it a month with no orders would be missing instead of $0.
-        """
-        frame = self._order_lines_frame()
-        frame = frame[frame["year"] == year]
-        if frame.empty:
-            return None
-        monthly = (
-            frame.groupby("month")["revenue"].sum()
-            .reindex(range(1, 13), fill_value=0)
-            .reset_index()
-        )
-        monthly["month"] = [calendar.month_abbr[m] for m in monthly["month"]]
-        return bar_figure(
-            monthly, "month", "revenue", f"Revenue by month, {year}",
-            {"month": "Month", "revenue": "Revenue ($)"},
-        )
 
     @classmethod
     def search(cls, company_name="", contact_name="", contact_title="", city="", country=""):
@@ -459,6 +595,57 @@ class Employee(models.Model):
             yaxis_title="Revenue ($)" if is_money else row["label"],
         )
         figure.update_yaxes(range=[0, max(values) * 1.25])
+        return figure_html(figure)
+
+    # An employee with fewer placed orders than this gets a "based on only N orders" note
+    # on the category mix chart, because a handful of orders can make one category look huge.
+    MIX_MIN_ORDERS = 20
+
+    def category_mix_plot(self, you_label="You"):
+        """
+        Grouped bar chart of category mix: for each category, this employee's share of
+        their own revenue next to the whole team's share of the team's revenue. Each
+        set of shares adds up to 100%, so the chart shows what each side sells rather
+        than who sells more. A category one side never sold is a 0% bar, so the two
+        series always line up. None when this employee has no placed orders.
+
+        The team's figures are grouped in the database and only the combined share per
+        category is kept here, never a colleague's row, so nothing about another
+        employee reaches the page. With fewer than MIX_MIN_ORDERS orders the title says
+        how few the chart rests on.
+        """
+        mine = self._order_lines_frame()
+        if mine.empty:
+            return None
+        mine_by_category = mine.groupby("category_name")["revenue"].sum()
+        team_rows = (
+            OrderDetail.objects.filter(order__order_date__isnull=False, order__employee__isnull=False)
+            .values(category=F("product__category__category_name"))
+            .annotate(revenue=Sum(Supplier._line_revenue()))
+        )
+        team_by_category = pd.Series(
+            {(row["category"] or "Uncategorized"): row["revenue"] for row in team_rows}, dtype=float
+        )
+
+        mix = pd.DataFrame({"you": mine_by_category, "team": team_by_category}).fillna(0)
+        mix["you"] = mix["you"] / mix["you"].sum() * 100
+        mix["team"] = mix["team"] / mix["team"].sum() * 100
+        mix = mix.sort_values("team", ascending=False)
+
+        orders = int(mine["order_id"].nunique())
+        note = f" (based on only {orders} orders)" if orders < self.MIX_MIN_ORDERS else ""
+        figure = go.Figure()
+        for column, name, color in (("you", you_label, CHART_COLORS[0]), ("team", "Team", "#5f6b76")):
+            figure.add_bar(
+                x=list(mix.index), y=list(mix[column]), name=name, marker_color=color,
+                text=[f"{v:.1f}%" for v in mix[column]], textposition="outside", cliponaxis=False,
+                hovertemplate="<b>%{x}</b><br>" + name + ": %{y:.1f}% of revenue<extra></extra>",
+            )
+        figure.update_layout(
+            title=f"Category mix: {you_label} compared with the team{note}", barmode="group", height=420,
+            yaxis_title="Share of revenue (%)", legend={"orientation": "h", "yanchor": "bottom", "y": 1.0, "xanchor": "right", "x": 1.0},
+        )
+        figure.update_yaxes(range=[0, mix.to_numpy().max() * 1.25])
         return figure_html(figure)
 
     def leaderboard(self):
@@ -830,7 +1017,7 @@ class Shipper(models.Model):
         db_table = 'shippers'
 
 
-class Supplier(models.Model):
+class Supplier(DashboardChartsMixin, models.Model):
     """A product supplier. No foreign keys."""
     supplier_id = models.SmallIntegerField(primary_key=True)
     company_name = models.CharField(max_length=40)
@@ -946,6 +1133,171 @@ class Supplier(models.Model):
                 "orders": sold.get("orders", 0),
             })
         return sorted(rows, key=lambda row: row["revenue"], reverse=True)
+
+    # region [CONCEPT] the supplier dashboard
+    # Every method below starts from _placed_lines(), which is already limited to this
+    # supplier's products, so no chart can include another supplier's sales. Each pulls
+    # the lines into a DataFrame (_order_lines_frame), groups them with pandas and hands the
+    # result to a helper in charts.py, like the customer and employee dashboards.
+    # The one place other suppliers' numbers are touched is comparison(): see its note.
+    # endregion
+    def _order_lines_frame(self, extra=None):
+        """This supplier's placed order lines as a DataFrame (lines_frame in charts.py); extra adds columns, e.g. {"discontinued": "product__discontinued"}."""
+        return lines_frame(self._placed_lines(), extra=extra)
+
+    def order_years(self):
+        """Distinct years this supplier's products were sold in, newest first."""
+        years = self._placed_lines().values_list("order__order_date__year", flat=True).distinct()
+        return sorted(years, reverse=True)
+
+    def top_products_plot(self, top=10, measure="revenue", include_discontinued=False, year=None):
+        """
+        Horizontal bar chart of this supplier's top products by revenue or by units
+        (measure = "revenue" or "quantity"), for one year or all of them. Discontinued
+        products are left out unless include_discontinued. None when none qualify.
+        """
+        frame = self._year_frame(year, extra={"discontinued": "product__discontinued"})
+        if not frame.empty and not include_discontinued:
+            frame = frame[frame["discontinued"] != 1]
+        return self._top_products_figure(frame, top, measure)
+
+    def top_customers(self, limit=10):
+        """
+        This supplier's best customers by what they spent on this supplier's
+        products, as a list of dicts: company_name, orders and share (percent of
+        this supplier's revenue). Nothing else about a customer, and nothing about
+        what else they buy, is ever read.
+        """
+        frame = self._order_lines_frame()
+        if frame.empty:
+            return []
+        total = frame["revenue"].sum()
+        grouped = (
+            frame.groupby("customer_name")
+            .agg(revenue=("revenue", "sum"), orders=("order_id", "nunique"))
+            .sort_values("revenue", ascending=False).head(limit)
+        )
+        return [
+            {"company_name": name, "orders": int(row["orders"]), "revenue": float(row["revenue"]),
+             "share": float(row["revenue"] / total * 100)}
+            for name, row in grouped.iterrows()
+        ]
+
+    # What the comparison chart's dropdown can compare: the key and its label.
+    SUPPLIER_MEASURES = {"revenue": "Revenue", "orders": "Orders", "units": "Units sold"}
+
+    # region [CONCEPT] comparing without revealing
+    # comparison() has to look at every supplier to find an average and a best, but
+    # only three numbers leave it. The best is a number (frame[measure].max()), not a
+    # row (sort_values(...).iloc[-1]), because a row carries its supplier with it. The
+    # per-supplier frame stays inside this method, so nothing about any other supplier
+    # reaches the view, the template or the page source.
+    # endregion
+    def comparison(self, measure="revenue"):
+        """
+        This supplier against all suppliers on one measure (a SUPPLIER_MEASURES key):
+        {"label", "kind", "you", "average", "best"}, where average is over the
+        suppliers that sold anything and best is the highest of them, unnamed.
+        None when nothing has been sold at all.
+        """
+        if measure not in self.SUPPLIER_MEASURES:
+            return None
+        rows = (
+            OrderDetail.objects.filter(order__order_date__isnull=False, product__supplier__isnull=False)
+            .values(supplier_key=F("product__supplier_id"))
+            .annotate(
+                revenue=Sum(self._line_revenue()),
+                orders=Count("order", distinct=True),
+                units=Sum("quantity"),
+            )
+        )
+        frame = pd.DataFrame(list(rows))
+        if frame.empty:
+            return None
+        mine = frame.loc[frame["supplier_key"] == self.pk, measure]
+        return {
+            "label": self.SUPPLIER_MEASURES[measure],
+            "kind": "money" if measure == "revenue" else "count",
+            "you": float(mine.iloc[0]) if len(mine) else 0.0,
+            "average": float(frame[measure].mean()),
+            "best": float(frame[measure].max()),
+        }
+
+    def comparison_plot(self, measure="revenue"):
+        """Bar chart for one measure: this supplier, the average of all suppliers and the best supplier (unnamed), in real units. None when there is nothing to compare."""
+        row = self.comparison(measure)
+        if row is None:
+            return None
+        names = ["You", "All-supplier average", "Best supplier"]
+        values = [row["you"], row["average"], row["best"]]
+        is_money = row["kind"] == "money"
+        text = [f"${v:,.0f}" if is_money else f"{v:,.0f}" for v in values]
+        figure = go.Figure(go.Bar(
+            x=names, y=values, text=text, textposition="outside", cliponaxis=False,
+            marker_color=[CHART_COLORS[0], "#5f6b76", CHART_COLORS[2]],
+            hovertemplate="<b>%{x}</b><br>%{text}<extra></extra>",
+        ))
+        figure.update_layout(
+            title=f"{row['label']}: you compared with all suppliers", height=340,
+            yaxis_title="Revenue ($)" if is_money else row["label"],
+        )
+        figure.update_yaxes(range=[0, (max(values) or 1) * 1.25])
+        return figure_html(figure)
+
+    # region [CONCEPT] Requirement 4: where do my sales come from?
+    # The chart answers "which countries do my customers buy from, and how much of my
+    # sales does each one account for?". The country is added to the frame with lines_frame's
+    # extra argument (the customer's country, order -> customer -> country); the customer's
+    # name is never used, and only totals per country leave the method, so the chart reads as
+    # countries and never as customers. A horizontal bar suits it better than a pie (a supplier
+    # can sell to a couple of dozen countries, too many slices to tell apart) or a map (it would
+    # need every country name matched to a map region, and shows dollars less exactly): a bar
+    # ranks the countries and can show the value and its percent share on the same label.
+    # endregion
+    # What the country chart can count: the key and its label.
+    COUNTRY_MEASURES = {"revenue": "Revenue", "units": "Units sold", "orders": "Orders"}
+
+    # The customers table spells a country two ways in places ("USA" for most customers,
+    # "United States" for one). The chart counts the second spelling as the first, so one
+    # country is one bar; nothing in the database is changed.
+    COUNTRY_ALIASES = {"United States": "USA"}
+
+    def country_sales_plot(self, year=None, measure="revenue"):
+        """
+        Horizontal bar chart of this supplier's sales by the customer's country
+        (measure = a COUNTRY_MEASURES key), for one year or all of them, largest at
+        the top. Each bar is labeled with its value and its share of the total, and
+        its hover repeats both. A customer with no country on record is counted under
+        "Unknown country", and COUNTRY_ALIASES merges two spellings of one country.
+        Countries only: no customer is named or counted. Returns None when there are
+        no sales.
+        """
+        every_year = self._order_lines_frame(extra={"country": "order__customer__country"})
+        if every_year.empty:
+            return None
+        every_year["country"] = (
+            every_year["country"].fillna("Unknown country").str.strip().replace(self.COUNTRY_ALIASES)
+        )
+        frame = every_year if year is None else every_year[every_year["year"] == year]
+        if frame.empty:
+            return None
+
+        by_country = frame.groupby("country").agg(
+            revenue=("revenue", "sum"), units=("quantity", "sum"), orders=("order_id", "nunique")
+        )
+        data = by_country[[measure]].reset_index().sort_values(measure)
+        data["percent"] = data[measure] / data[measure].sum() * 100
+        label = self.COUNTRY_MEASURES[measure]
+        money = "$" if measure == "revenue" else ""
+        shown = [f"{money}{v:,.0f} ({p:.1f}%)" for v, p in zip(data[measure], data["percent"])]
+        scope = f", {year}" if year else ""
+        return bar_figure(
+            data, "country", measure, f"{label} by customer country{scope}",
+            {"country": "Customer country", measure: "Revenue ($)" if measure == "revenue" else label},
+            color_names=every_year["country"], horizontal=True, trend=False,
+            height=max(260, 42 * len(data) + 120), text=shown,
+            hover=[f"<b>{c}</b><br>{label}: {t}" for c, t in zip(data["country"], shown)],
+        )
 
     class Meta:
         managed = False

@@ -1,5 +1,6 @@
 /**
- * Customers: client-side form validation and the dashboard's year dropdown.
+ * Customers: client-side form validation and the dashboard's controls (the category charts'
+ * controls are ActivateCategoryControls in suppliers.js, which both dashboards share).
  * Loaded by base.html after DjangoTraders.js.
  */
 
@@ -84,4 +85,26 @@ function ActivateYearDropdown($pane) {
     }
     $select.on("change", loadMonthly);
     loadMonthly();
+}
+
+/**
+ * Customer dashboard: the "Year" and "Show Top" dropdowns both reload the two top-product
+ * charts (by revenue, by units) in #dashboard-top-products. The first charts arrive
+ * already drawn.
+ * @param {jQuery} $pane - the tab pane that was just loaded
+ */
+function ActivateTopProductCharts($pane) {
+    const $controls = $pane.find("#top-product-charts-controls");
+    if ($controls.length === 0) {
+        return;
+    }
+    const $year = $controls.find("#top-year");
+    const $top = $controls.find("#top-count");
+    function loadTopProducts() {
+        $.get($controls.data("url"), { year: $year.val(), top: $top.val() })
+            .done(function (html) { $("#dashboard-top-products").html(html); })
+            .fail(function () { $("#dashboard-top-products").text("Could not load the charts."); });
+    }
+    $year.on("change", loadTopProducts);
+    $top.on("change", loadTopProducts);
 }

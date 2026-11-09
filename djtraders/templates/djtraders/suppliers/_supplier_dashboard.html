@@ -1,0 +1,41 @@
+{# Partial (no base.html) for the Supplier Dashboard tab -- supplier_dashboard view. Everything here covers this supplier's own products only. #}
+{% if stats %}
+    {% include "djtraders/suppliers/_supplier_tiles.html" %}
+    {# Row 1: revenue by year (with its trend line) and revenue by month for a chosen year. #}
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            {% include "djtraders/suppliers/_supplier_revenue_by_year.html" %}
+        </div>
+        <div class="col-lg-6">
+            {% include "djtraders/suppliers/_supplier_revenue_by_month.html" %}
+        </div>
+    </div>
+    {# Row 2: the category charts (one Year control drives both) and the top products. #}
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            {% include "djtraders/suppliers/_supplier_sales_by_category.html" %}
+        </div>
+    </div>
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            {% include "djtraders/suppliers/_supplier_top_products.html" %}
+        </div>
+    </div>
+    {# Row 3: top customers and the comparison with all suppliers. #}
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            {% include "djtraders/suppliers/_supplier_top_customers.html" %}
+        </div>
+        <div class="col-lg-6">
+            {% include "djtraders/suppliers/_supplier_comparison_with_all_suppliers.html" %}
+        </div>
+    </div>
+    {# Row 4: where the sales come from (Requirement 4's own question), by customer country. #}
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            {% include "djtraders/suppliers/_supplier_where_do_my_sales_come_from.html" %}
+        </div>
+    </div>
+{% else %}
+    <div class="dt-subtle">No placed orders include {{ supplier.company_name }}'s products yet, so there is nothing to chart.</div>
+{% endif %}

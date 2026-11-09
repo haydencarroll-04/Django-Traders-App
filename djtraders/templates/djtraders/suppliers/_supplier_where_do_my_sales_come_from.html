@@ -1,0 +1,29 @@
+{# Where do my sales come from? Sales by the customer's country, never by customer (Supplier.country_sales_plot). The Year dropdown and Measure radio buttons reload only the chart (supplier_country_chart, ActivateCountryControls in suppliers.js). #}
+<div class="dt-card h-100">
+    <h5 class="dt-card-title">Where Do My Sales Come From?</h5>
+    <div class="dt-subtle">
+        Which countries do my customers buy from, and how much of my sales does each one account for?
+    </div>
+    <nav id="country-controls" class="dt-controls"
+         data-url="{% url 'djtraders:supplier_country_chart' supplier.supplier_id %}">
+        <div class="dt-control-group">
+            <label for="country-year" class="fw-bold mb-0">Year</label>
+            <select id="country-year" class="form-select w-auto">
+                <option value="all" selected>All years</option>
+                {% for year in order_years %}
+                    <option value="{{ year }}">{{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="dt-control-group" role="radiogroup" aria-labelledby="country-measure-label">
+            <span id="country-measure-label" class="fw-bold">Measure</span>
+            {% for key, label in country_measures.items %}
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="radio" name="country-measure" id="country-measure-{{ key }}" value="{{ key }}"{% if forloop.first %} checked{% endif %}>
+                    <label class="form-check-label" for="country-measure-{{ key }}">{{ label }}</label>
+                </div>
+            {% endfor %}
+        </div>
+    </nav>
+    <div id="dashboard-country">{% if country_plot %}{{ country_plot|safe }}{% else %}<p class="dt-subtle">No orders on record.</p>{% endif %}</div>
+</div>

@@ -1,0 +1,30 @@
+{# Category charts. One Year dropdown and one "Unit share as" choice reload both charts together (customer_category_charts, ActivateCategoryControls in suppliers.js, which both dashboards share). #}
+<div class="dt-card h-100">
+    <h5 class="dt-card-title">Sales by Category</h5>
+    <nav id="category-controls" class="dt-controls"
+         data-url="{% url 'djtraders:customer_category_charts' customer.customer_id %}">
+        <div class="dt-control-group">
+            <label for="category-year" class="fw-bold mb-0">Year</label>
+            <select id="category-year" class="form-select w-auto">
+                <option value="all" selected>All years</option>
+                {% for year in order_years %}
+                    <option value="{{ year }}">{{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="dt-control-group" role="radiogroup" aria-labelledby="category-kind-label">
+            <span id="category-kind-label" class="fw-bold">Unit share as</span>
+            <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="radio" name="category-kind" id="category-kind-bar" value="bar" checked>
+                <label class="form-check-label" for="category-kind-bar">Percent bars</label>
+            </div>
+            <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="radio" name="category-kind" id="category-kind-pie" value="pie">
+                <label class="form-check-label" for="category-kind-pie">Pie</label>
+            </div>
+        </div>
+    </nav>
+    <div id="dashboard-categories">
+        {% include "djtraders/customers/_customer_category_charts.html" %}
+    </div>
+</div>

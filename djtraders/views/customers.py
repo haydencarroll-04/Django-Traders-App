@@ -184,8 +184,10 @@ def customer_delete(request, customer_id):
 # endregion
 def customer_dashboard(request, customer_id):
     """
-    Dashboard tab: the customer's revenue by year as a Plotly chart
-    (Customer.annual_orders_plot), or a message when there are no placed orders.
+    Dashboard tab: the four summary cards, revenue by year, monthly revenue (its year
+    dropdown loads the chart itself), the category charts and the top products, or a
+    message when there are no placed orders. The first version of each chart that has
+    a control arrives already drawn; its control swaps it later.
     """
     if customer_tab_denied(request, customer_id):
         return HttpResponse(status=403)
@@ -193,29 +195,70 @@ def customer_dashboard(request, customer_id):
 
     context = {
         "customer": customer,
-        "annual_plot": customer.annual_orders_plot(),
+        "stats": customer.dashboard_stats(),
+        "annual_plot": customer.annual_revenue_plot(),
         "order_years": customer.order_years(),
+        "category_revenue_plot": customer.category_revenue_plot(),
+        "category_units_plot": customer.category_units_plot(),
+        "top_revenue_plot": customer.top_products_plot(measure="revenue"),
+        "top_units_plot": customer.top_products_plot(measure="quantity"),
     }
     return render(request, "djtraders/customers/_customer_dashboard.html", context)
 
 
 def customer_monthly_chart(request, customer_id):
     """
-    The dashboard's year dropdown: Customer.orders_placed_plot for ?year=, as
+    The dashboard's year dropdown: Customer.monthly_revenue_plot for ?year=, as
     just the chart HTML that fills #dashboard-monthly. The year comes from the
     browser, so it is checked: 400 unless it is one of this customer's order years.
     """
     if customer_tab_denied(request, customer_id):
         return HttpResponse(status=403)
     customer = get_object_or_404(Customer, pk=customer_id)
-    try:
-        year = int(request.GET.get("year", ""))
-    except ValueError:
+    year = customer.parse_year(request.GET.get("year", ""))
+    if not year:
         return HttpResponse("Choose a valid year.", status=400)
-    if year not in customer.order_years():
-        return HttpResponse("Choose a valid year.", status=400)
-    plot = customer.orders_placed_plot(year)
+    plot = customer.monthly_revenue_plot(year)
     return HttpResponse(plot or "<p>No orders on record.</p>")
+
+
+def customer_category_charts(request, customer_id):
+    """
+    The category section's controls (?year= a year or "all", ?kind= bar or pie for
+    the unit share): both category charts together, as the HTML that fills
+    #dashboard-categories, so one control changes both. The year is checked against
+    this customer's order years and the kind against a fixed list (400 otherwise).
+    """
+    if customer_tab_denied(request, customer_id):
+        return HttpResponse(status=403)
+    customer = get_object_or_404(Customer, pk=customer_id)
+    year = customer.parse_year(request.GET.get("year", "all"))
+    kind = request.GET.get("kind", "bar")
+    if year is False or kind not in ("bar", "pie"):
+        return HttpResponse("Choose a valid year and chart.", status=400)
+    return render(request, "djtraders/customers/_customer_category_charts.html", {
+        "category_revenue_plot": customer.category_revenue_plot(year),
+        "category_units_plot": customer.category_units_plot(year, kind),
+    })
+
+
+def customer_top_products_chart(request, customer_id):
+    """
+    The top-products section's controls (?year= a year or "all", ?top= 5, 10 or 20):
+    the by-revenue and by-units charts together, as the HTML that fills
+    #dashboard-top-products. Both values are checked (400 otherwise).
+    """
+    if customer_tab_denied(request, customer_id):
+        return HttpResponse(status=403)
+    customer = get_object_or_404(Customer, pk=customer_id)
+    year = customer.parse_year(request.GET.get("year", "all"))
+    top = request.GET.get("top", "10")
+    if year is False or top not in ("5", "10", "20"):
+        return HttpResponse("Choose a valid year and number of products.", status=400)
+    return render(request, "djtraders/customers/_customer_top_product_charts.html", {
+        "top_revenue_plot": customer.top_products_plot(int(top), "revenue", year),
+        "top_units_plot": customer.top_products_plot(int(top), "quantity", year),
+    })
 
 
 def customer_info(request, customer_id):

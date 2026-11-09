@@ -112,10 +112,15 @@ function LoadPageTab($tabButton) {
             }
 
             ActivateYearDropdown($pane);
+            ActivateTopProductCharts($pane);
             ActivateBreakdownControls($pane);
             ActivateCustomerControls($pane);
             ActivateTeamComparison($pane);
             ActivateRevenueOverTime($pane);
+            ActivateCategoryControls($pane);
+            ActivateTopProductControls($pane);
+            ActivateSupplierComparison($pane);
+            ActivateCountryControls($pane);
         })
         .fail(function () {
             $pane.text("Could not load this tab. Please try again.");

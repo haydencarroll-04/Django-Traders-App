@@ -1,0 +1,9 @@
+{# The two top-product charts side by side: by revenue and by units. Also what customer_top_products_chart returns when a control changes. #}
+<div class="row g-3">
+    <div class="col-lg-6">
+        {% if top_revenue_plot %}{{ top_revenue_plot|safe }}{% else %}<p class="dt-subtle">No orders in this period.</p>{% endif %}
+    </div>
+    <div class="col-lg-6">
+        {% if top_units_plot %}{{ top_units_plot|safe }}{% else %}<p class="dt-subtle">No orders in this period.</p>{% endif %}
+    </div>
+</div>

@@ -77,7 +77,7 @@ def employee_detail(request, employee_id):
 def employee_dashboard(request, employee_id):
     """
     Dashboard tab, for the orders this employee handled: the rank tiles, a team
-    comparison chart and table, revenue over time (by year or month, with a Details
+    comparison chart and table, category mix, revenue over time (by year or month, with a Details
     modal per period), revenue by customer, and a revenue breakdown by supplier,
     product or category. A manager also gets a leaderboard naming every employee,
     and sees every group's revenue in the breakdown; anyone else sees their own
@@ -97,6 +97,7 @@ def employee_dashboard(request, employee_id):
         "team_measures": Employee.TEAM_MEASURES,
         "comparison_plot": employee.team_comparison_plot("revenue", you_label),
         "leaderboard": employee.leaderboard() if viewer.is_manager else [],
+        "category_mix_plot": employee.category_mix_plot(you_label),
         "revenue_plot": employee.revenue_over_time(),
         "revenue_years": employee.revenue_years(),
         "customer_plot": employee.customer_revenue_plot(top=10),

@@ -1,0 +1,29 @@
+{# Top products: "Show Top", "Measure" and "Include discontinued" reload the chart in #dashboard-top-products (supplier_top_products_chart, ActivateTopProductControls in suppliers.js). The chart title follows Show Top ("Top 5 products by revenue"); when fewer products have sales than that, it adds "(only N with sales)", so the bars stay the same size for 5, 10 and 20. #}
+<div class="dt-card h-100">
+    <h5 class="dt-card-title">Top Products</h5>
+    <nav id="top-products-controls" class="dt-controls"
+         data-url="{% url 'djtraders:supplier_top_products_chart' supplier.supplier_id %}">
+        <div class="dt-control-group">
+            <label for="top-count" class="fw-bold mb-0">Show Top</label>
+            <select id="top-count" class="form-select w-auto">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+            </select>
+        </div>
+        <div class="dt-control-group" role="radiogroup" aria-labelledby="top-measure-label">
+            <span id="top-measure-label" class="fw-bold">Measure</span>
+            {% for key, label in top_measures.items %}
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="radio" name="top-measure" id="top-measure-{{ key }}" value="{{ key }}"{% if forloop.first %} checked{% endif %}>
+                    <label class="form-check-label" for="top-measure-{{ key }}">{{ label }}</label>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" id="top-discontinued">
+            <label class="form-check-label" for="top-discontinued">Include discontinued products</label>
+        </div>
+    </nav>
+    <div id="dashboard-top-products">{% if top_products_plot %}{{ top_products_plot|safe }}{% else %}<p class="dt-subtle">No products to show.</p>{% endif %}</div>
+</div>

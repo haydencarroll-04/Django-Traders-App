@@ -1,0 +1,9 @@
+{# The two category charts side by side: revenue by category and unit share by category. Also what customer_category_charts returns when a control changes. #}
+<div class="row g-3">
+    <div class="col-lg-6">
+        {% if category_revenue_plot %}{{ category_revenue_plot|safe }}{% else %}<p class="dt-subtle">No orders in this period.</p>{% endif %}
+    </div>
+    <div class="col-lg-6">
+        {% if category_units_plot %}{{ category_units_plot|safe }}{% else %}<p class="dt-subtle">No orders in this period.</p>{% endif %}
+    </div>
+</div>

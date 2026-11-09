@@ -1,0 +1,27 @@
+{# Top products: "Year" and "Show Top" reload both charts in #dashboard-top-products (customer_top_products_chart, ActivateTopProductCharts in customers.js). The chart titles follow Show Top; when the customer has bought fewer products than that, they add "(only N with sales)". #}
+<div class="dt-card h-100">
+    <h5 class="dt-card-title">Top Products</h5>
+    <nav id="top-product-charts-controls" class="dt-controls"
+         data-url="{% url 'djtraders:customer_top_products_chart' customer.customer_id %}">
+        <div class="dt-control-group">
+            <label for="top-year" class="fw-bold mb-0">Year</label>
+            <select id="top-year" class="form-select w-auto">
+                <option value="all" selected>All years</option>
+                {% for year in order_years %}
+                    <option value="{{ year }}">{{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="dt-control-group">
+            <label for="top-count" class="fw-bold mb-0">Show Top</label>
+            <select id="top-count" class="form-select w-auto">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+            </select>
+        </div>
+    </nav>
+    <div id="dashboard-top-products">
+        {% include "djtraders/customers/_customer_top_product_charts.html" %}
+    </div>
+</div>

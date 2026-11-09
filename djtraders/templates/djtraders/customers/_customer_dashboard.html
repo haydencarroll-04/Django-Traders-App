@@ -1,11 +1,25 @@
 {# Partial (no base.html) for the Dashboard tab -- customer_dashboard view. #}
-{% if annual_plot %}
+{% if stats %}
+    {% include "djtraders/customers/_customer_tiles.html" %}
+    {# Row 1: revenue by year and revenue by month for a chosen year. #}
     <div class="row g-3 mb-3">
         <div class="col-lg-6">
             {% include "djtraders/customers/_customer_revenue_by_year.html" %}
         </div>
         <div class="col-lg-6">
             {% include "djtraders/customers/_customer_revenue_by_month.html" %}
+        </div>
+    </div>
+    {# Row 2: the category charts (one Year control drives both). #}
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            {% include "djtraders/customers/_customer_sales_by_category.html" %}
+        </div>
+    </div>
+    {# Row 3: the top products, by revenue and by units. #}
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            {% include "djtraders/customers/_customer_top_products.html" %}
         </div>
     </div>
 {% else %}

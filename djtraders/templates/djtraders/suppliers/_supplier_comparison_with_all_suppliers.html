@@ -1,0 +1,16 @@
+{# Comparison with all suppliers: this supplier, the average of all suppliers and the best supplier, on one measure. No supplier is named and only these three numbers are ever sent (Supplier.comparison); the Compare dropdown reloads only the chart (supplier_comparison_chart, ActivateSupplierComparison in suppliers.js). #}
+<div class="dt-card h-100">
+    <h5 class="dt-card-title">Comparison with All Suppliers</h5>
+    <nav id="comparison-controls" class="dt-controls"
+         data-url="{% url 'djtraders:supplier_comparison_chart' supplier.supplier_id %}">
+        <div class="dt-control-group">
+            <label for="comparison-measure" class="fw-bold mb-0">Compare</label>
+            <select id="comparison-measure" class="form-select w-auto">
+                {% for key, label in comparison_measures.items %}
+                    <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </nav>
+    <div id="dashboard-comparison">{% if comparison_plot %}{{ comparison_plot|safe }}{% else %}<p class="dt-subtle">Nothing to compare yet.</p>{% endif %}</div>
+</div>
